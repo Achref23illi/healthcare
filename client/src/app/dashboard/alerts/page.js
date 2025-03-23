@@ -4,10 +4,11 @@ import axios from 'axios';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Bell, Home, Users, User, BarChart, Search, Megaphone, LogOut, Menu } from 'lucide-react';
+import { Filter, ArrowLeft, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import RoleBasedLayout from '@/components/RoleBasedLayout';
 
 export default function Alerts() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   const [alerts, setAlerts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -15,8 +16,13 @@ export default function Alerts() {
     status: '',
     severity: ''
   });
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [stats, setStats] = useState({
+    total: 0,
+    new: 0,
+    acknowledged: 0,
+    resolved: 0
+  });
 
   useEffect(() => {
     if (!user) {
@@ -44,7 +50,17 @@ export default function Alerts() {
         
         const response = await axios.get(url, config);
         
-        setAlerts(response.data.alerts || response.data);
+        const alertsData = response.data.alerts || response.data;
+        setAlerts(alertsData);
+        
+        // Calculate stats
+        setStats({
+          total: alertsData.length,
+          new: alertsData.filter(a => a.status === 'New').length,
+          acknowledged: alertsData.filter(a => a.status === 'Acknowledged').length,
+          resolved: alertsData.filter(a => a.status === 'Resolved').length
+        });
+        
         setIsLoading(false);
       } catch (error) {
         console.error('Error fetching alerts:', error);
@@ -75,177 +91,291 @@ export default function Alerts() {
       setAlerts(alerts.map(alert => 
         alert._id === alertId ? { ...alert, status: newStatus } : alert
       ));
+      
+      // Update stats
+      setStats({
+        ...stats,
+        new: newStatus === 'New' ? stats.new : (stats.new - (alerts.find(a => a._id === alertId).status === 'New' ? 1 : 0)),
+        acknowledged: newStatus === 'Acknowledged' ? stats.acknowledged + 1 : (stats.acknowledged - (alerts.find(a => a._id === alertId).status === 'Acknowledged' ? 1 : 0)),
+        resolved: newStatus === 'Resolved' ? stats.resolved + 1 : (stats.resolved - (alerts.find(a => a._id === alertId).status === 'Resolved' ? 1 : 0))
+      });
     } catch (error) {
       console.error('Error updating alert status:', error);
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    router.push('/login');
-  };
-
   const getSeverityColor = (severity) => {
     switch (severity) {
-      case 'Critical': return 'bg-red-100 text-red-800';
-      case 'High': return 'bg-orange-100 text-orange-800';
-      case 'Medium': return 'bg-yellow-100 text-yellow-800';
-      case 'Low': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'Critical': 
+        return {
+          bg: 'bg-red-100',
+          text: 'text-red-800',
+          icon: <AlertCircle className="w-4 h-4 mr-1 text-red-800" />
+        };
+      case 'High': 
+        return {
+          bg: 'bg-orange-100',
+          text: 'text-orange-800',
+          icon: <AlertCircle className="w-4 h-4 mr-1 text-orange-800" />
+        };
+      case 'Medium': 
+        return {
+          bg: 'bg-yellow-100',
+          text: 'text-yellow-800',
+          icon: <AlertCircle className="w-4 h-4 mr-1 text-yellow-800" />
+        };
+      case 'Low': 
+        return {
+          bg: 'bg-blue-100',
+          text: 'text-blue-800',
+          icon: <AlertCircle className="w-4 h-4 mr-1 text-blue-800" />
+        };
+      default: 
+        return {
+          bg: 'bg-gray-100',
+          text: 'text-gray-800',
+          icon: <AlertCircle className="w-4 h-4 mr-1 text-gray-800" />
+        };
+    }
+  };
+  
+  const getStatusInfo = (status) => {
+    switch (status) {
+      case 'New': 
+        return {
+          bg: 'bg-red-100',
+          text: 'text-red-800',
+          icon: <Clock className="w-4 h-4 mr-1 text-red-800" />
+        };
+      case 'Acknowledged': 
+        return {
+          bg: 'bg-yellow-100',
+          text: 'text-yellow-800',
+          icon: <CheckCircle className="w-4 h-4 mr-1 text-yellow-800" />
+        };
+      case 'Resolved': 
+        return {
+          bg: 'bg-green-100',
+          text: 'text-green-800',
+          icon: <CheckCircle className="w-4 h-4 mr-1 text-green-800" />
+        };
+      default: 
+        return {
+          bg: 'bg-gray-100',
+          text: 'text-gray-800',
+          icon: <Clock className="w-4 h-4 mr-1 text-gray-800" />
+        };
     }
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
-        <p className="mt-4 text-gray-600">Loading alerts...</p>
-      </div>
+      <RoleBasedLayout>
+        <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#0c3948]"></div>
+          <p className="mt-4 text-gray-600">Loading alerts...</p>
+        </div>
+      </RoleBasedLayout>
     );
   }
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
-      <aside
-        className={`w-64 bg-white p-5 shadow text-[#0c3948] fixed h-full transform transition-transform duration-300 ease-in-out ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } md:translate-x-0`}
-      >
-        <h2 className="text-xl font-bold mb-6">Medico</h2>
-        <nav>
-          <ul className="space-y-2">
-            <li>
-              <Link href="/dashboard" className="flex items-center p-2 rounded hover:bg-[#f2f4ea]">
-                <Home className="w-5 h-5 mr-2" /> Dashboard
-              </Link>
-            </li>
-            <h3 className="text-lg font-semibold mt-4">Information</h3>
-            <li>
-              <Link href="/dashboard/patients/add_patient" className="flex items-center p-2 rounded hover:bg-[#f2f4ea]">
-                <User className="w-5 h-5 mr-2" /> Add Patient
-              </Link>
-            </li>
-            <li>
-              <Link href="/dashboard/patients/manage_patients" className="flex items-center p-2 rounded hover:bg-[#f2f4ea]">
-                <Users className="w-5 h-5 mr-2" /> Patients
-              </Link>
-            </li>
-            <li>
-              <Link href="/dashboard/alerts" className="flex items-center bg-[#f2f4ea] text-[#0c3948] p-2 rounded">
-                <Bell className="w-5 h-5 mr-2" /> Alerts
-              </Link>
-            </li>
-            <li className="flex items-center p-2 rounded hover:bg-[#f2f4ea]">
-              <BarChart className="w-5 h-5 mr-2" /> Consultation
-            </li>
-            <h3 className="text-lg font-semibold mt-4">Analytics</h3>
-            <li className="flex items-center p-2 rounded hover:bg-[#f2f4ea]">
-              <Megaphone className="w-5 h-5 mr-2" /> Marketing
-            </li>
-          </ul>
-        </nav>
-      </aside>
-
-      <div className="flex flex-col flex-1 md:ml-64">
-        {/* Top Bar */}
-        <div className="flex justify-between items-center p-4 bg-white shadow-md sticky top-0 z-10">
-          <div className="flex items-center">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="md:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-            <h1 className="text-xl font-bold ml-4">Alert Management</h1>
+    <RoleBasedLayout>
+      <div className="max-w-7xl mx-auto">
+        {/* Page Header */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Alert Management</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Monitor and respond to patient alerts
+            </p>
           </div>
-          <div className="flex items-center gap-4">
-            <Bell className="w-6 h-6 text-gray-600 cursor-pointer" />
-            <div className="relative">
-              <button onClick={() => setDropdownOpen(!dropdownOpen)}>
-                <img src="/images/profile.png" alt="Profile" className="w-10 h-10 rounded-full" />
-              </button>
-              {dropdownOpen && (
-                <div className="absolute right-0 mt-2 bg-white shadow-md rounded-lg p-2 w-48">
-                  <button className="flex items-center p-2 w-full hover:bg-gray-100">
-                    <User className="w-5 h-5 mr-2" /> Edit Profile
-                  </button>
-                  <button
-                    onClick={handleLogout}
-                    className="flex items-center p-2 w-full hover:bg-gray-100"
-                  >
-                    <LogOut className="w-5 h-5 mr-2" /> Logout
-                  </button>
+          <div className="mt-4 md:mt-0">
+            <button 
+              onClick={() => router.back()}
+              className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0c3948]"
+            >
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Back
+            </button>
+          </div>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-6">
+          <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="px-4 py-5 sm:p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0 bg-[#0c3948] rounded-md p-3">
+                  <AlertCircle className="h-6 w-6 text-white" />
                 </div>
-              )}
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">
+                      Total Alerts
+                    </dt>
+                    <dd className="flex items-baseline">
+                      <div className="text-2xl font-semibold text-gray-900">
+                        {stats.total}
+                      </div>
+                    </dd>
+                  </dl>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="px-4 py-5 sm:p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0 bg-red-500 rounded-md p-3">
+                  <Clock className="h-6 w-6 text-white" />
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">
+                      New Alerts
+                    </dt>
+                    <dd className="flex items-baseline">
+                      <div className="text-2xl font-semibold text-gray-900">
+                        {stats.new}
+                      </div>
+                    </dd>
+                  </dl>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="px-4 py-5 sm:p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0 bg-yellow-500 rounded-md p-3">
+                  <CheckCircle className="h-6 w-6 text-white" />
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">
+                      Acknowledged
+                    </dt>
+                    <dd className="flex items-baseline">
+                      <div className="text-2xl font-semibold text-gray-900">
+                        {stats.acknowledged}
+                      </div>
+                    </dd>
+                  </dl>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="px-4 py-5 sm:p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0 bg-green-500 rounded-md p-3">
+                  <CheckCircle className="h-6 w-6 text-white" />
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">
+                      Resolved
+                    </dt>
+                    <dd className="flex items-baseline">
+                      <div className="text-2xl font-semibold text-gray-900">
+                        {stats.resolved}
+                      </div>
+                    </dd>
+                  </dl>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="p-6">
-          <div className="mb-6">
-            <p className="text-gray-600">Monitor and respond to patient alerts</p>
-          </div>
-
-          {/* Filters */}
-          <div className="mb-6 flex flex-wrap gap-4">
-            <div>
-              <label htmlFor="statusFilter" className="block text-sm font-medium text-gray-700 mb-1">
-                Filter by Status
-              </label>
-              <select
-                id="statusFilter"
-                value={filter.status}
-                onChange={(e) => setFilter({...filter, status: e.target.value})}
-                className="block w-40 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+        {/* Filters */}
+        <div className="bg-white shadow rounded-lg mb-6">
+          <div className="px-4 py-5 sm:p-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
+              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4 md:mb-0">
+                Filter Alerts
+              </h3>
+              <button
+                onClick={() => setIsFilterOpen(!isFilterOpen)}
+                className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
               >
-                <option value="">All</option>
-                <option value="New">New</option>
-                <option value="Acknowledged">Acknowledged</option>
-                <option value="Resolved">Resolved</option>
-              </select>
+                <Filter className="h-4 w-4 mr-2" />
+                {isFilterOpen ? 'Hide Filters' : 'Show Filters'}
+              </button>
             </div>
             
-            <div>
-              <label htmlFor="severityFilter" className="block text-sm font-medium text-gray-700 mb-1">
-                Filter by Severity
-              </label>
-              <select
-                id="severityFilter"
-                value={filter.severity}
-                onChange={(e) => setFilter({...filter, severity: e.target.value})}
-                className="block w-40 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-              >
-                <option value="">All</option>
-                <option value="Critical">Critical</option>
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-              </select>
-            </div>
+            {isFilterOpen && (
+              <div className="mt-6 grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="statusFilter" className="block text-sm font-medium text-gray-700 mb-1">
+                    Filter by Status
+                  </label>
+                  <select
+                    id="statusFilter"
+                    value={filter.status}
+                    onChange={(e) => setFilter({...filter, status: e.target.value})}
+                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-[#0c3948] focus:border-[#0c3948] sm:text-sm rounded-md"
+                  >
+                    <option value="">All Statuses</option>
+                    <option value="New">New</option>
+                    <option value="Acknowledged">Acknowledged</option>
+                    <option value="Resolved">Resolved</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label htmlFor="severityFilter" className="block text-sm font-medium text-gray-700 mb-1">
+                    Filter by Severity
+                  </label>
+                  <select
+                    id="severityFilter"
+                    value={filter.severity}
+                    onChange={(e) => setFilter({...filter, severity: e.target.value})}
+                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-[#0c3948] focus:border-[#0c3948] sm:text-sm rounded-md"
+                  >
+                    <option value="">All Severities</option>
+                    <option value="Critical">Critical</option>
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
+        </div>
 
-          {/* Alerts Table */}
-          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+        {/* Alerts Table */}
+        <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+          <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
+            <h3 className="text-lg leading-6 font-medium text-gray-900">
+              All Alerts ({alerts.length})
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Patient
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Message
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Severity
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Time
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -253,28 +383,35 @@ export default function Alerts() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {alerts.length > 0 ? (
                   alerts.map((alert) => (
-                    <tr key={alert._id}>
+                    <tr key={alert._id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {alert.patient?.firstName ? 
-                            `${alert.patient.firstName} ${alert.patient.lastName}` : 
-                            '(Patient Name)'}
+                        <div className="flex items-center">
+                          <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                            <span className="text-xs font-medium text-[#0c3948]">
+                              {alert.patient?.firstName?.charAt(0) || '?'}{alert.patient?.lastName?.charAt(0) || '?'}
+                            </span>
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-medium text-gray-900">
+                              {alert.patient?.firstName ? 
+                                `${alert.patient.firstName} ${alert.patient.lastName}` : 
+                                '(Patient Name)'}
+                            </div>
+                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900">{alert.message}</div>
+                        <div className="text-sm text-gray-900 max-w-md">{alert.message}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getSeverityColor(alert.severity)}`}>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getSeverityColor(alert.severity).bg} ${getSeverityColor(alert.severity).text}`}>
+                          {getSeverityColor(alert.severity).icon}
                           {alert.severity}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          alert.status === 'New' ? 'bg-red-100 text-red-800' :
-                          alert.status === 'Acknowledged' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-green-100 text-green-800'
-                        }`}>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusInfo(alert.status).bg} ${getStatusInfo(alert.status).text}`}>
+                          {getStatusInfo(alert.status).icon}
                           {alert.status}
                         </span>
                       </td>
@@ -282,29 +419,42 @@ export default function Alerts() {
                         {new Date(alert.createdAt).toLocaleString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        {alert.status === 'New' && (
-                          <button 
-                            onClick={() => handleStatusUpdate(alert._id, 'Acknowledged')}
-                            className="text-indigo-600 hover:text-indigo-900 mr-2"
+                        <div className="flex space-x-2">
+                          {alert.status === 'New' && (
+                            <button 
+                              onClick={() => handleStatusUpdate(alert._id, 'Acknowledged')}
+                              className="text-yellow-600 hover:text-yellow-900 bg-yellow-50 px-2 py-1 rounded"
+                            >
+                              Acknowledge
+                            </button>
+                          )}
+                          {alert.status !== 'Resolved' && (
+                            <button 
+                              onClick={() => handleStatusUpdate(alert._id, 'Resolved')}
+                              className="text-green-600 hover:text-green-900 bg-green-50 px-2 py-1 rounded"
+                            >
+                              Resolve
+                            </button>
+                          )}
+                          
+                          <Link
+                            href={`/dashboard/patients/vitals/${alert.patient?._id}`}
+                            className="text-[#0c3948] hover:text-[#155e76] px-2 py-1 rounded"
                           >
-                            Acknowledge
-                          </button>
-                        )}
-                        {alert.status !== 'Resolved' && (
-                          <button 
-                            onClick={() => handleStatusUpdate(alert._id, 'Resolved')}
-                            className="text-green-600 hover:text-green-900"
-                          >
-                            Resolve
-                          </button>
-                        )}
+                            View Patient
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">
-                      No alerts found
+                    <td colSpan="6" className="px-6 py-12 text-center text-sm text-gray-500">
+                      <div className="flex flex-col items-center">
+                        <XCircle className="h-10 w-10 text-gray-400 mb-4" />
+                        <p className="text-base font-medium text-gray-500">No alerts found</p>
+                        <p className="text-sm text-gray-400 mt-1">Try adjusting your filters or check back later</p>
+                      </div>
                     </td>
                   </tr>
                 )}
@@ -313,6 +463,6 @@ export default function Alerts() {
           </div>
         </div>
       </div>
-    </div>
+    </RoleBasedLayout>
   );
 }
