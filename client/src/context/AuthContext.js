@@ -11,27 +11,58 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
+
+  // Handle hydration mismatch by setting mounted state
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Configure axios to always include the token if it exists
+  useEffect(() => {
+    if (!mounted) return;
+
+    if (user?.token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${user.token}`;
+    } else {
+      delete axios.defaults.headers.common['Authorization'];
+    }
+  }, [user, mounted]);
 
   // Load user from local storage on initial load
   useEffect(() => {
+    if (!mounted) return;
+
     const loadUser = async () => {
       try {
         console.log('Loading user from storage...');
         
-        // Make sure we only run this on client-side
-        if (typeof window !== 'undefined') {
-          const storedUser = localStorage.getItem('user');
+        const storedUser = localStorage.getItem('user');
+        
+        if (storedUser) {
+          console.log('Found stored user');
+          const parsedUser = JSON.parse(storedUser);
+          setUser(parsedUser);
           
-          if (storedUser) {
-            console.log('Found stored user');
-            const parsedUser = JSON.parse(storedUser);
-            setUser(parsedUser);
-            console.log('User set from localStorage:', parsedUser);
-          } else {
-            console.log('No stored user found');
+          // Verify token is still valid with backend
+          try {
+            const config = {
+              headers: {
+                Authorization: `Bearer ${parsedUser.token}`
+              }
+            };
+            
+            await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, config);
+            console.log('Token verified successfully');
+          } catch (verifyError) {
+            console.error('Token verification failed:', verifyError);
+            localStorage.removeItem('user');
             setUser(null);
           }
+        } else {
+          console.log('No stored user found');
+          setUser(null);
         }
       } catch (error) {
         console.error('Failed to load user from storage', error);
@@ -42,10 +73,11 @@ export const AuthProvider = ({ children }) => {
     };
 
     loadUser();
-  }, []);
+  }, [mounted]);
 
   // Register user
   const register = async (userData) => {
+    if (!mounted) return;
     try {
       setLoading(true);
       setError(null);
@@ -73,6 +105,7 @@ export const AuthProvider = ({ children }) => {
 
   // Login user
   const login = async (email, password) => {
+    if (!mounted) return;
     try {
       setLoading(true);
       setError(null);
@@ -86,10 +119,13 @@ export const AuthProvider = ({ children }) => {
       const data = response.data;
       console.log('Login successful, received data:', data);
       
-      // Save to localStorage
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('user', JSON.stringify(data));
+      // Verify the response has role and token
+      if (!data.role || !data.token) {
+        throw new Error('Invalid response from server');
       }
+      
+      // Save to localStorage
+      localStorage.setItem('user', JSON.stringify(data));
       
       // Update context state
       setUser(data);
@@ -110,19 +146,26 @@ export const AuthProvider = ({ children }) => {
 
   // Logout user
   const logout = () => {
+    if (!mounted) return;
     localStorage.removeItem('user');
     setUser(null);
+    delete axios.defaults.headers.common['Authorization'];
     router.push('/login');
   };
 
   // Get user profile
-  const getUserProfile = async (token) => {
+  const getUserProfile = async () => {
+    if (!mounted) return;
     try {
       setLoading(true);
       
+      if (!user?.token) {
+        throw new Error('Not authenticated');
+      }
+      
       const config = {
         headers: {
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${user.token}`
         }
       };
       
@@ -134,6 +177,10 @@ export const AuthProvider = ({ children }) => {
       return response.data;
     } catch (error) {
       console.error('Failed to get user profile', error);
+      if (error.response?.status === 401) {
+        // Token expired or invalid, log out
+        logout();
+      }
       throw error;
     } finally {
       setLoading(false);
@@ -142,18 +189,18 @@ export const AuthProvider = ({ children }) => {
 
   // Update user profile
   const updateProfile = async (userData) => {
+    if (!mounted) return;
     try {
       setLoading(true);
       setError(null);
       
-      const token = user?.token;
-      if (!token) {
+      if (!user?.token) {
         throw new Error('Not authenticated');
       }
       
       const config = {
         headers: {
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${user.token}`
         }
       };
       
@@ -165,8 +212,8 @@ export const AuthProvider = ({ children }) => {
       
       // Update user in localStorage and state
       const updatedUser = {
+        ...user,
         ...response.data,
-        token
       };
       
       localStorage.setItem('user', JSON.stringify(updatedUser));
@@ -178,6 +225,12 @@ export const AuthProvider = ({ children }) => {
         error.response?.data?.message || 
         'Failed to update profile. Please try again.'
       );
+      
+      if (error.response?.status === 401) {
+        // Token expired or invalid, log out
+        logout();
+      }
+      
       throw error;
     } finally {
       setLoading(false);
@@ -186,6 +239,7 @@ export const AuthProvider = ({ children }) => {
 
   // Forgot password
   const forgotPassword = async (email) => {
+    if (!mounted) return;
     try {
       setLoading(true);
       setError(null);
@@ -209,6 +263,7 @@ export const AuthProvider = ({ children }) => {
 
   // Reset password
   const resetPassword = async (password, token) => {
+    if (!mounted) return;
     try {
       setLoading(true);
       setError(null);
@@ -229,6 +284,11 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }
   };
+
+  // Don't render children until hydration is complete
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <AuthContext.Provider

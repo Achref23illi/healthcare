@@ -10,11 +10,25 @@ export default function LoginPage() {
     email: '',
     password: '',
   });
-  const [role, setRole] = useState('patient');
   const [isLoading, setIsLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
-  const { login, error } = useAuth();
+  const { login, error, user } = useAuth();
   const router = useRouter();
+
+  // Check if user is already logged in
+  useEffect(() => {
+    if (user) {
+      redirectBasedOnRole(user.role);
+    }
+  }, [user]);
+
+  const redirectBasedOnRole = (role) => {
+    if (role === 'doctor') {
+      router.push('/dashboard');
+    } else if (role === 'patient') {
+      router.push('/patient-dashboard');
+    }
+  };
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -26,27 +40,17 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
+      // Get user data from authentication
       const userData = await login(formData.email, formData.password);
-
-      // Redirect based on role (optional: verify role from response if needed)
-      if (userData?.role === 'doctor' || role === 'doctor') {
-        router.push('/dashboard');
-      } else {
-        router.push('/patient-dashboard');
-      }
+      
+      // Important: Use role from server response, not local state
+      redirectBasedOnRole(userData.role);
     } catch (err) {
       setLoginError(err?.response?.data?.message || 'Login failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
-
-  useEffect(() => {
-    console.log('Login page mounted');
-    return () => {
-      console.log('Login page unmounted');
-    };
-  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-indigo-100 via-purple-50 to-blue-100 py-12 px-4 sm:px-6 lg:px-8">
@@ -104,35 +108,6 @@ export default function LoginPage() {
                   onChange={handleChange}
                 />
               </div>
-
-              {/* Role Toggle */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Login as</label>
-                <div className="mt-2 flex space-x-4">
-                  <button
-                    type="button"
-                    onClick={() => setRole('patient')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium border ${
-                      role === 'patient'
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-white text-gray-700 border-gray-300'
-                    }`}
-                  >
-                    Patient
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRole('doctor')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium border ${
-                      role === 'doctor'
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-white text-gray-700 border-gray-300'
-                    }`}
-                  >
-                    Doctor
-                  </button>
-                </div>
-              </div>
             </div>
 
             <div className="flex items-center justify-between">
@@ -153,7 +128,7 @@ export default function LoginPage() {
 
             <div className="text-center mt-8">
               <p className="text-sm text-gray-600">
-                Don’t have an account?{' '}
+                Don&apos;t have an account?{' '}
                 <Link href="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
                   Create one
                 </Link>

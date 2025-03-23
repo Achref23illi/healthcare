@@ -3,13 +3,19 @@ import Head from 'next/head';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState } from 'react'; 
-import { headerContent, heroContent, featuresContent,servicesContent } from '@/constants/index';
+import { useRouter } from 'next/navigation';
+import { headerContent, heroContent, featuresContent, servicesContent } from '@/constants/index';
 
 export default function Home() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const router = useRouter();
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
+  };
+
+  const handleRegisterClick = () => {
+    router.push('/register');
   };
 
   return (
@@ -25,7 +31,7 @@ export default function Home() {
             </span>
           </div>
 
-          {/* Menu Burger (visible sur les petits écrans) */}
+          {/* Menu Burger (visible on small screens) */}
           <div className="md:hidden">
             <button onClick={toggleMenu} className="text-[#0c3948] focus:outline-none">
               {isMenuOpen ? (
@@ -62,7 +68,7 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Menu Items (visible sur les écrans moyens et plus grands) */}
+          {/* Menu Items (visible on medium and larger screens) */}
           <ul className="hidden md:flex flex-row space-x-8">
             {headerContent.menus.map((item, i) => (
               <Link href={item.link} key={i}>
@@ -77,7 +83,7 @@ export default function Home() {
             ))}
           </ul>
 
-          {/* Button (visible sur les écrans moyens et plus grands) */}
+          {/* Register Button (visible on medium and larger screens) */}
           <Link href="/register" className="hidden md:block">
             <button className="rounded-md bg-[#0c3948] px-7 py-3 font-semibold text-white transition hover:bg-sky-900/90 focus:outline-none">
               {headerContent.button}
@@ -85,7 +91,7 @@ export default function Home() {
           </Link>
         </nav>
 
-        {/* Menu Mobile (visible sur les petits écrans lorsque le menu est ouvert) */}
+        {/* Mobile Menu (visible on small screens when menu is open) */}
         {isMenuOpen && (
           <div className="md:hidden w-full bg-[#f2f4ea] absolute top-20 left-0 z-50">
             <ul className="flex flex-col space-y-4 p-4">
@@ -113,9 +119,9 @@ export default function Home() {
      {/* Hero Section */}
         <section className="w-full bg-[#f2f4ea]">
           <div className="mx-auto grid max-w-7xl grid-cols-1 pt-8 md:grid-cols-2">
-            {/* Main Content (centré sur mobile, aligné à gauche sur PC) */}
+            {/* Main Content (centered on mobile, aligned left on PC) */}
             <div className="flex flex-col items-center text-center md:items-start md:text-left space-y-3 py-6 px-4">
-              {/* Titre */}
+              {/* Title */}
               <h1 className="flex flex-col space-y-3 text-3xl md:text-6xl font-bold text-[#0c3948]">
                 <span>For Best</span>
                 <span>
@@ -130,20 +136,22 @@ export default function Home() {
                 {heroContent.description}
               </p>
 
-              {/* Boutons */}
+              {/* Buttons */}
               <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-8 pt-6">
                 <Link href="/register">
                   <button className="rounded-md bg-[#0c3948] px-5 py-2 md:px-7 md:py-3 font-semibold text-white transition hover:bg-sky-900/90 focus:outline-none">
                     {headerContent.button}
                   </button>
                 </Link>
-                <button className="font-semibold text-sky-700 transition hover:text-sky-700 focus:outline-none">
-                  See more
-                </button>
+                <Link href="/login">
+                  <button className="font-semibold text-sky-700 transition hover:text-sky-900 focus:outline-none">
+                    Already have an account? Login
+                  </button>
+                </Link>
               </div>
             </div>
 
-            {/* Images (masquées sur mobile, visibles sur PC) */}
+            {/* Images (hidden on mobile, visible on PC) */}
             <div className="hidden md:block relative">
               <div className="absolute left-15 top-1/4 z-10 -mt-20 h-100 w-100">
                 <Image
@@ -189,9 +197,9 @@ export default function Home() {
                 className="flex cursor-pointer flex-row place-content-center items-center space-x-4 rounded p-4 transition"
                 key={i}
               >
-                {/* Icône */}
+                {/* Icon */}
                 <div className="rounded bg-[#f2f4ea] p-3 text-[#0c3948]">{item.icon}</div>
-                {/* Titre et description */}
+                {/* Title and description */}
                 <div className="flex flex-col">
                   <h3 className="font-bold">{item.title}</h3>
                   <p className="max-w-[150px] text-xs font-light">
@@ -220,9 +228,41 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
+                
+                {/* Call to Action Button */}
+                <div className="mt-10">
+                  <Link href="/register">
+                    <button className="rounded-md bg-[#0c3948] px-8 py-4 font-semibold text-white transition hover:bg-sky-900/90 focus:outline-none">
+                      Register Now and Get Started
+                    </button>
+                  </Link>
+                </div>
           </section>
 
-
+          {/* Footer with Login Option */}
+          <footer className="bg-[#0c3948] text-white py-8">
+            <div className="container mx-auto px-4">
+              <div className="flex flex-col md:flex-row justify-between items-center">
+                <div className="mb-6 md:mb-0">
+                  <h2 className="text-2xl font-bold">Medico</h2>
+                  <p className="mt-2">Providing reliable healthcare monitoring solutions.</p>
+                </div>
+                
+                <div className="flex flex-col items-center">
+                  <p className="mb-2">Already have an account?</p>
+                  <Link href="/login">
+                    <button className="bg-white text-[#0c3948] px-6 py-2 rounded-full font-semibold hover:bg-gray-100 transition">
+                      Login Now
+                    </button>
+                  </Link>
+                </div>
+              </div>
+              
+              <div className="border-t border-gray-700 mt-8 pt-6 text-center">
+                <p>© 2025 Medico. All rights reserved.</p>
+              </div>
+            </div>
+          </footer>
     </div>
   );
 }
