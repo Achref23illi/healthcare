@@ -1,16 +1,16 @@
 'use client';
 import Head from "next/head";
 import { useState, useEffect } from "react";
-import Link from 'next/link';
-import { Bell, Home, Users, User, BarChart, Search, Megaphone, LogOut, Menu } from "lucide-react";
+import axios from 'axios';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
+import RoleBasedLayout from '@/components/RoleBasedLayout';
 
 export default function Dashboard() {
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, loading, logout } = useAuth();
   const router = useRouter();
+  const [dashboardData, setDashboardData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -18,10 +18,34 @@ export default function Dashboard() {
     }
   }, [user, loading, router]);
 
-  const handleLogout = () => {
-    logout();
-    router.push('/login');
-  };
+  useEffect(() => {
+    const fetchDashboardStats = async () => {
+      try {
+        if (!user?.token) return;
+
+        const config = {
+          headers: {
+            Authorization: `Bearer ${user.token}`
+          }
+        };
+
+        const response = await axios.get(
+          `${process.env.NEXT_PUBLIC_API_URL}/analytics/dashboard`,
+          config
+        );
+
+        setDashboardData(response.data);
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error fetching dashboard stats:', error);
+        setIsLoading(false);
+      }
+    };
+
+    if (user) {
+      fetchDashboardStats();
+    }
+  }, [user]);
 
   if (loading || !user) {
     return (
@@ -33,113 +57,58 @@ export default function Dashboard() {
   }
 
   return (
-    <>
+    <RoleBasedLayout>
       <Head>
         <title>Dashboard</title>
       </Head>
-      <div className="flex h-screen bg-gray-100">
-        <aside
-          className={`w-64 bg-white p-5 shadow text-[#0c3948] fixed h-full transform transition-transform duration-300 ease-in-out ${
-            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          } md:translate-x-0`}
-        >
-          <h2 className="text-xl font-bold mb-6">Medico</h2>
-          <nav>
-            <ul className="space-y-2">
-              <li>
-                <Link href="/dashboard" className="flex items-center bg-[#f2f4ea] text-[#0c3948] p-2 rounded">
-                  <Home className="w-5 h-5 mr-2" /> Dashboard
-                </Link>
-              </li>
-              <h3 className="text-lg font-semibold mt-4">Information</h3>
-              <li>
-                <Link href="/dashboard/patients/add_patient" className="flex items-center p-2 rounded hover:bg-[#f2f4ea]">
-                  <User className="w-5 h-5 mr-2" /> Add Patient
-                </Link>
-              </li>
-              <li>
-                <Link href="/dashboard/patients/manage_patients" className="flex items-center p-2 rounded hover:bg-[#f2f4ea]">
-                  <Users className="w-5 h-5 mr-2" /> Patients
-                </Link>
-              </li>
-              <li className="flex items-center p-2 rounded hover:bg-[#f2f4ea]">
-                <BarChart className="w-5 h-5 mr-2" /> Consultation
-              </li>
-              <h3 className="text-lg font-semibold mt-4">Analytics</h3>
-              <li className="flex items-center p-2 rounded hover:bg-[#f2f4ea]">
-                <Megaphone className="w-5 h-5 mr-2" /> Marketing
-              </li>
-            </ul>
-          </nav>
-        </aside>
-
-        <div className="flex flex-col flex-1 md:ml-64">
-          <div className="flex justify-between items-center p-4 bg-white shadow-md sticky top-0 z-10">
-            <div className="flex items-center">
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="md:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
-              >
-                <Menu className="w-5 h-5" />
-              </button>
-              <div className="flex items-center bg-gray-100 p-2 rounded-lg ml-2">
-                <Search className="w-5 h-5 text-gray-500 mr-2" />
-                <input type="text" placeholder="Search patient..." className="bg-transparent outline-none text-gray-700" />
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <Bell className="w-6 h-6 text-gray-600 cursor-pointer" />
-              <div className="relative">
-                <button onClick={() => setDropdownOpen(!dropdownOpen)}>
-                  <img src="/images/profile.png" alt="Profile" className="w-10 h-10 rounded-full" />
-                </button>
-                {dropdownOpen && (
-                  <div className="absolute right-0 mt-2 bg-white shadow-md rounded-lg p-2 w-48">
-                    <button className="flex items-center p-2 w-full hover:bg-gray-100">
-                      <User className="w-5 h-5 mr-2" /> Edit Profile
-                    </button>
-                    <button
-                      onClick={handleLogout}
-                      className="flex items-center p-2 w-full hover:bg-gray-100"
-                    >
-                      <LogOut className="w-5 h-5 mr-2" /> Logout
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
+      <div className="p-6 pt-10 pl-8 w-full">
+        <div className="bg-white overflow-hidden shadow-lg rounded-lg mb-8 w-full">
+          <div className="p-6 bg-[#0c3948] text-white">
+            <h2 className="text-2xl font-bold">Welcome to your dashboard, {user.name}!</h2>
+            <p className="mt-2 text-indigo-100">We&apos;re glad to have you here. This is your secure personal space.</p>
           </div>
+        </div>
 
-          <div className="p-6 pt-10 pl-8 w-full">
-            <div className="bg-white overflow-hidden shadow-lg rounded-lg mb-8 w-full">
-              <div className="p-6 bg-[#0c3948] text-white">
-                <h2 className="text-2xl font-bold">Welcome to your dashboard, {user.name}!</h2>
-                <p className="mt-2 text-indigo-100">We're glad to have you here. This is your secure personal space.</p>
-              </div>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <h3 className="text-gray-500">Patients</h3>
+            <p className="text-2xl font-bold">
+              {dashboardData ? dashboardData.patientStats.total : '...'}
+            </p>
+            <p className="text-green-500">Recent Activity</p>
+          </div>
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <h3 className="text-gray-500">Alerts</h3>
+            <p className="text-2xl font-bold">
+              {dashboardData ? 
+                (dashboardData.alertStats?.byStatus?.New || 0) + 
+                (dashboardData.alertStats?.byStatus?.Acknowledged || 0) : 
+                '...'}
+            </p>
+            <p className="text-amber-500">Need attention</p>
+          </div>
+        </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
-              <div className="bg-white p-6 rounded-2xl shadow-lg">
-                <h3 className="text-gray-500">Patients</h3>
-                <p className="text-2xl font-bold">3,782</p>
-                <p className="text-green-500">+11.01%</p>
-              </div>
-              <div className="bg-white p-6 rounded-2xl shadow-lg">
-                <h3 className="text-gray-500">Consultations</h3>
-                <p className="text-2xl font-bold">5,359</p>
-                <p className="text-red-500">-9.05%</p>
-              </div>
-            </div>
-
-            <div className="mt-10 grid grid-cols-1 gap-6 w-full">
-              <div className="bg-white p-6 rounded-2xl shadow-lg">
-                <h3 className="text-gray-500">Monthly Patients</h3>
-                <div className="h-32 bg-[#f2f4ea] mt-4 rounded"></div>
-              </div>
+        <div className="mt-10 grid grid-cols-1 gap-6 w-full">
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <h3 className="text-gray-500">Patient Status</h3>
+            <div className="h-32 bg-[#f2f4ea] mt-4 rounded p-4">
+              {dashboardData && dashboardData.criticalPatients && (
+                <div>
+                  <h4 className="font-semibold">Critical Patients: {dashboardData.criticalPatients.length}</h4>
+                  <ul className="mt-2">
+                    {dashboardData.criticalPatients.map((patient, index) => (
+                      <li key={index} className="text-sm text-red-600">
+                        {patient.firstName} {patient.lastName} - {patient.chronicDisease || 'No condition specified'}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
-    </>
+    </RoleBasedLayout>
   );
 }

@@ -36,3 +36,14 @@ exports.updateProfile = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+exports.getUsers = async (req, res) => {
+  try {
+    const filter = req.query.role ? { role: req.query.role } : {};
+    const users = await User.find(filter).select('-password');
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'Failed to fetch users' });
+  }
+};

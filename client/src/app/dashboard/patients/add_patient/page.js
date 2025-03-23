@@ -1,13 +1,14 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import axios from 'axios';
 import { Bell, Home, Users, User, BarChart, Search, Megaphone, LogOut, Menu } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 
 export default function AddPatient() {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const router = useRouter();
 
   const [patient, setPatient] = useState({
@@ -22,6 +23,13 @@ export default function AddPatient() {
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  useEffect(() => {
+    if (!user) {
+      router.push('/login');
+    }
+  }, [user, router]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -31,19 +39,59 @@ export default function AddPatient() {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Patient Data:', patient);
-    alert('Patient information saved successfully!');
-    setPatient({
-      firstName: '',
-      lastName: '',
-      age: '',
-      chronicDisease: '',
-      temperature: '',
-      heartRate: '',
-      oxygenSaturation: ''
-    });
+    try {
+      // Get token from auth context
+      const token = user?.token;
+      
+      if (!token) {
+        setMessage({
+          type: 'error',
+          text: 'You must be logged in to add a patient'
+        });
+        return;
+      }
+      
+      const config = {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      };
+      
+      // Send request to backend API
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/patients`,
+        patient,
+        config
+      );
+      
+      console.log('Patient Data:', response.data);
+      setMessage({
+        type: 'success',
+        text: 'Patient information saved successfully!'
+      });
+      
+      // Reset form
+      setPatient({
+        firstName: '',
+        lastName: '',
+        age: '',
+        chronicDisease: '',
+        temperature: '',
+        heartRate: '',
+        oxygenSaturation: ''
+      });
+      
+      // Clear message after 3 seconds
+      setTimeout(() => setMessage(null), 3000);
+    } catch (error) {
+      console.error('Error adding patient:', error);
+      setMessage({
+        type: 'error',
+        text: error.response?.data?.message || 'Failed to save patient information.'
+      });
+    }
   };
 
   const handleLogout = () => {
@@ -61,6 +109,15 @@ export default function AddPatient() {
     { name: 'oxygenSaturation', label: 'Oxygen Saturation (%)', type: 'number' }
   ];
 
+  if (!user) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+        <p className="mt-4 text-gray-600">Loading...</p>
+      </div>
+    );
+  }
+
   return (
     <>
       <Head>
@@ -73,11 +130,11 @@ export default function AddPatient() {
             sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           } md:translate-x-0`}
         >
-          <h2 className="text-xl font-bold mb-6">TailAdmin</h2>
+          <h2 className="text-xl font-bold mb-6">Medico</h2>
           <nav>
             <ul className="space-y-2">
               <li>
-                <Link href="/dashboard" className="flex items-center  text-[#0c3948] p-2 rounded-lg hover:bg-[#f2f4ea] transition duration-200">
+                <Link href="/dashboard" className="flex items-center text-[#0c3948] p-2 rounded-lg hover:bg-[#f2f4ea] transition duration-200">
                   <Home className="w-5 h-5 mr-2" /> Dashboard
                 </Link>
               </li>
@@ -90,6 +147,11 @@ export default function AddPatient() {
               <li>
                 <Link href="/dashboard/patients/manage_patients" className="flex items-center p-2 rounded-lg hover:bg-[#f2f4ea] transition duration-200">
                   <Users className="w-5 h-5 mr-2" /> Patients
+                </Link>
+              </li>
+              <li>
+                <Link href="/dashboard/alerts" className="flex items-center p-2 rounded-lg hover:bg-[#f2f4ea] transition duration-200">
+                  <Bell className="w-5 h-5 mr-2" /> Alerts
                 </Link>
               </li>
               <li className="flex items-center p-2 rounded-lg hover:bg-[#f2f4ea] transition duration-200">
@@ -146,6 +208,15 @@ export default function AddPatient() {
           <div className="mt-10 p-6">
             <div className="max-w-4xl mx-auto bg-white p-8 rounded-2xl shadow-2xl">
               <h2 className="text-3xl font-bold text-center text-gray-800 mb-8">Add a New Patient</h2>
+              
+              {message && (
+                <div className={`mb-6 p-4 rounded-lg ${
+                  message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                }`}>
+                  {message.text}
+                </div>
+              )}
+              
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {fields.map((field) => (

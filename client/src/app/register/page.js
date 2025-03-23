@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import axios from 'axios';
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -11,11 +12,28 @@ export default function RegisterPage() {
     email: '',
     password: '',
     confirmPassword: '',
+    age: '',
+    assignedDoctor: ''
   });
+  const [role, setRole] = useState('patient');
+  const [doctors, setDoctors] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [registerError, setRegisterError] = useState('');
   const { register, error } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    const fetchDoctors = async () => {
+      try {
+        const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/users?role=doctor`);
+        setDoctors(res.data);
+      } catch (err) {
+        console.error('Error fetching doctors:', err);
+      }
+    };
+
+    fetchDoctors(); // Fetch doctors regardless of role
+  }, []);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -25,7 +43,6 @@ export default function RegisterPage() {
     e.preventDefault();
     setRegisterError('');
 
-    // Check if passwords match
     if (formData.password !== formData.confirmPassword) {
       setRegisterError('Passwords do not match');
       return;
@@ -34,29 +51,24 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      await register({
+      const payload = {
         name: formData.name,
         email: formData.email,
         password: formData.password,
-      });
-      router.push('/dashboard');
+        role
+      };
+
+      if (role === 'patient') {
+        payload.age = formData.age;
+        payload.assignedDoctor = formData.assignedDoctor;
+      }
+
+      await register(payload);
+
+      router.push(role === 'doctor' ? '/dashboard' : '/patient-dashboard');
     } catch (err) {
       console.error('Registration error details:', err);
-      if (err.response) {
-        // The request was made and the server responded with a status code
-        // that falls out of the range of 2xx
-        console.error('Error response data:', err.response.data);
-        console.error('Error response status:', err.response.status);
-        setRegisterError(err.response.data.message || 'Server error');
-      } else if (err.request) {
-        // The request was made but no response was received
-        console.error('No response received:', err.request);
-        setRegisterError('Network error - no response from server');
-      } else {
-        // Something happened in setting up the request that triggered an Error
-        console.error('Error message:', err.message);
-        setRegisterError(err.message || 'An unexpected error occurred');
-      }
+      setRegisterError(err?.response?.data?.message || 'Registration failed');
     } finally {
       setIsLoading(false);
     }
@@ -65,11 +77,9 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-indigo-100 via-purple-50 to-blue-100 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8 relative">
-        {/* Background design elements */}
         <div className="absolute inset-0 bg-white rounded-2xl shadow-2xl transform -rotate-1 opacity-50"></div>
         <div className="absolute inset-0 bg-white rounded-2xl shadow-2xl transform rotate-1 opacity-50"></div>
-        
-        {/* Main content */}
+
         <div className="relative bg-white p-10 rounded-2xl shadow-xl border border-gray-100">
           <div className="text-center">
             <div className="mx-auto h-16 w-16 flex items-center justify-center rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 shadow-lg mb-6">
@@ -80,128 +90,145 @@ export default function RegisterPage() {
             <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 tracking-tight">
               Create Account
             </h1>
-            <p className="mt-3 text-gray-500">
-              Sign up to get started with our platform
-            </p>
+            <p className="mt-3 text-gray-500">Sign up to get started with our platform</p>
           </div>
-          
+
           {(registerError || error) && (
-            <div className="mt-6 bg-red-50 border-l-4 border-red-500 p-4 rounded-md animate-pulse" role="alert">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-red-700">
-                    {registerError || error}
-                  </p>
-                </div>
-              </div>
+            <div className="mt-6 bg-red-50 border-l-4 border-red-500 p-4 rounded-md" role="alert">
+              <p className="text-sm text-red-700">{registerError || error}</p>
             </div>
           )}
-          
+
           <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
             <div className="space-y-5">
+              {/* Full Name */}
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                  Full Name
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
-                    </svg>
-                  </div>
-                  <input
-                    id="name"
-                    name="name"
-                    type="text"
-                    autoComplete="name"
-                    required
-                    className="py-3 pl-10 block w-full border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 transition duration-200"
-                    placeholder="John Doe"
-                    value={formData.name}
-                    onChange={handleChange}
-                  />
-                </div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700">Full Name</label>
+                <input
+                  id="name"
+                  name="name"
+                  type="text"
+                  required
+                  className="mt-1 py-3 px-4 block w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="John Doe"
+                  value={formData.name}
+                  onChange={handleChange}
+                />
               </div>
-              
+
+              {/* Email */}
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                  Email Address
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
-                    </svg>
-                  </div>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    required
-                    className="py-3 pl-10 block w-full border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 transition duration-200"
-                    placeholder="you@example.com"
-                    value={formData.email}
-                    onChange={handleChange}
-                  />
-                </div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email Address</label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  className="mt-1 py-3 px-4 block w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="you@example.com"
+                  value={formData.email}
+                  onChange={handleChange}
+                />
               </div>
-              
+
+              {/* Password */}
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                  Password
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                  </div>
-                  <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    autoComplete="new-password"
-                    required
-                    className="py-3 pl-10 block w-full border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 transition duration-200"
-                    placeholder="••••••••"
-                    value={formData.password}
-                    onChange={handleChange}
-                    minLength={6}
-                  />
-                </div>
-                <p className="mt-1 text-xs text-gray-500">
-                  Password must be at least 6 characters long
-                </p>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  required
+                  minLength={6}
+                  className="mt-1 py-3 px-4 block w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="••••••••"
+                  value={formData.password}
+                  onChange={handleChange}
+                />
               </div>
-              
+
+              {/* Confirm Password */}
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                  Confirm Password
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">Confirm Password</label>
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  required
+                  minLength={6}
+                  className="mt-1 py-3 px-4 block w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="••••••••"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                />
+              </div>
+
+              {/* Patient-specific fields */}
+              {role === 'patient' && (
+                <>
+                  {/* Age */}
+                  <div>
+                    <label htmlFor="age" className="block text-sm font-medium text-gray-700">Age</label>
+                    <input
+                      id="age"
+                      name="age"
+                      type="number"
+                      required
+                      className="mt-1 py-3 px-4 block w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="e.g. 35"
+                      value={formData.age}
+                      onChange={handleChange}
+                    />
                   </div>
-                  <input
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    type="password"
-                    autoComplete="new-password"
-                    required
-                    className="py-3 pl-10 block w-full border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 transition duration-200"
-                    placeholder="••••••••"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    minLength={6}
-                  />
+
+                  {/* Doctor selection */}
+                  <div>
+                    <label htmlFor="assignedDoctor" className="block text-sm font-medium text-gray-700">Assign to Doctor</label>
+                    <select
+                      id="assignedDoctor"
+                      name="assignedDoctor"
+                      required
+                      className="mt-1 py-3 px-4 block w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                      value={formData.assignedDoctor}
+                      onChange={handleChange}
+                    >
+                      <option value="">Select a doctor</option>
+                      {doctors
+                        .filter(doc => doc.role === 'doctor')
+                        .map(doc => (
+                          <option key={doc._id} value={doc._id}>{doc.name}</option>
+                        ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {/* Role Toggle */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Register as</label>
+                <div className="mt-2 flex space-x-4">
+                  <button
+                    type="button"
+                    onClick={() => setRole('patient')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border ${
+                      role === 'patient'
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-white text-gray-700 border-gray-300'
+                    }`}
+                  >
+                    Patient
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRole('doctor')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border ${
+                      role === 'doctor'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-white text-gray-700 border-gray-300'
+                    }`}
+                  >
+                    Doctor
+                  </button>
                 </div>
               </div>
             </div>
@@ -210,33 +237,16 @@ export default function RegisterPage() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-200 shadow-lg transform hover:-translate-y-0.5"
+                className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                {isLoading ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Creating account...
-                  </>
-                ) : (
-                  <>
-                    Sign up
-                    <span className="absolute right-4 inset-y-0 flex items-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 transition-transform duration-200 group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                      </svg>
-                    </span>
-                  </>
-                )}
+                {isLoading ? 'Creating account...' : 'Sign up'}
               </button>
             </div>
 
-            <div className="text-center mt-8">
+            <div className="text-center mt-6">
               <p className="text-sm text-gray-600">
                 Already have an account?{' '}
-                <Link href="/login" className="font-medium text-indigo-600 hover:text-indigo-500 transition duration-200">
+                <Link href="/login" className="font-medium text-indigo-600 hover:text-indigo-500">
                   Sign in
                 </Link>
               </p>

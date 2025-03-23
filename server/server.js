@@ -1,4 +1,4 @@
-// Update your server.js file:
+// server.js
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
@@ -25,32 +25,30 @@ app.use(passport.initialize());
 require('./config/passport')(passport);
 
 // Connect to MongoDB
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 15000 // Increase timeout to 15 seconds
-    });
-    console.log('MongoDB Connected Successfully');
-    
-    // Only start the server after successful MongoDB connection
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-    });
-  } catch (error) {
-    console.error(`MongoDB Connection Error: ${error.message}`);
-    process.exit(1);
-  }
-};
+mongoose.connect(process.env.MONGO_URI, {})
+.then(() => {
+  console.log('MongoDB Connected Successfully');
+  // Start the server after successful MongoDB connection
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+})
+.catch(err => {
+  console.error('MongoDB Connection Error:', err.message);
+  process.exit(1);
+});
 
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
+app.use('/api/patients', require('./routes/patientsRoutes')); 
+app.use('/api/vitals', require('./routes/vitalRoutes'));
+app.use('/api/alerts', require('./routes/alertRoutes'));
+app.use('/api/analytics', require('./routes/analyticsRoutes'));
 
 // Basic route for testing
 app.get('/', (req, res) => {
-  res.send('API is running...');
+  res.send('Healthcare Monitoring API is running...');
 });
 
 // Error handling middleware
@@ -58,6 +56,3 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ message: 'Something went wrong!' });
 });
-
-// Start the connection process
-connectDB();

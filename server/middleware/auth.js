@@ -1,4 +1,5 @@
 const passport = require('passport');
+const jwt = require('jsonwebtoken');
 
 /**
  * Middleware to protect routes
@@ -14,4 +15,11 @@ exports.isAdmin = (req, res, next) => {
   } else {
     res.status(403).json({ message: 'Not authorized as admin' });
   }
+};
+
+/**
+ * Utility to generate a JWT token for a user
+ */
+exports.generateToken = (id) => {
+  return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
 };
