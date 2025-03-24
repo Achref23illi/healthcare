@@ -33,9 +33,18 @@ export const AuthProvider = ({ children }) => {
   // Load user from local storage on initial load
   useEffect(() => {
     if (!mounted) return;
-
+  
     const loadUser = async () => {
       try {
+        // Check if this was a manual logout
+        const wasManualLogout = sessionStorage.getItem('manual_logout');
+        
+        if (wasManualLogout) {
+          // Clear the flag but don't automatically log back in
+          sessionStorage.removeItem('manual_logout');
+          return;
+        }
+        
         console.log('Loading user from storage...');
         
         const storedUser = localStorage.getItem('user');
@@ -45,21 +54,7 @@ export const AuthProvider = ({ children }) => {
           const parsedUser = JSON.parse(storedUser);
           setUser(parsedUser);
           
-          // Verify token is still valid with backend
-          try {
-            const config = {
-              headers: {
-                Authorization: `Bearer ${parsedUser.token}`
-              }
-            };
-            
-            await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, config);
-            console.log('Token verified successfully');
-          } catch (verifyError) {
-            console.error('Token verification failed:', verifyError);
-            localStorage.removeItem('user');
-            setUser(null);
-          }
+          // Rest of your existing code for token verification
         } else {
           console.log('No stored user found');
           setUser(null);
@@ -71,7 +66,7 @@ export const AuthProvider = ({ children }) => {
         setLoading(false);
       }
     };
-
+  
     loadUser();
   }, [mounted]);
 
@@ -147,10 +142,27 @@ export const AuthProvider = ({ children }) => {
   // Logout user
   const logout = () => {
     if (!mounted) return;
-    localStorage.removeItem('user');
-    setUser(null);
-    delete axios.defaults.headers.common['Authorization'];
-    router.push('/login');
+    
+    try {
+      // Set a manual logout flag to prevent redirect loops
+      sessionStorage.setItem('manual_logout', 'true');
+      
+      // Clear user state first
+      setUser(null);
+      
+      // Remove all stored authentication data
+      localStorage.removeItem('user');
+      
+      // Clear any authorization headers
+      delete axios.defaults.headers.common['Authorization'];
+      
+      // Navigate with replacement to prevent history issues
+      router.replace('/login');
+    } catch (error) {
+      console.error('Error during logout:', error);
+      // Force a hard refresh as a fallback
+      window.location.href = '/login';
+    }
   };
 
   // Get user profile

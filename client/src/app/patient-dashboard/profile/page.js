@@ -1,6 +1,6 @@
 'use client';
 
-// This page allows the user (doctor or patient) to view and edit their profile.
+// Improved ProfilePage component for client/src/app/patient-dashboard/profile/page.js
 
 import { useEffect, useState } from 'react';
 import axios from 'axios';
@@ -17,34 +17,57 @@ export default function ProfilePage() {
     profilePicture: ''
   });
   const [status, setStatus] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // If user is not logged in, redirect to login
     if (!loading && !user) {
       router.push('/login');
+      return;
     }
-  }, [user, loading, router]);
 
-  useEffect(() => {
+    // Only fetch profile if user is logged in
     const fetchProfile = async () => {
       try {
+        setIsLoading(true);
+        
+        if (!user?.token) {
+          // If no token is available, don't make the API call
+          setIsLoading(false);
+          return;
+        }
+        
         const config = {
           headers: {
             Authorization: `Bearer ${user.token}`
           }
         };
+        
         const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/users/me`, config);
+        
         setFormData({
-          name: res.data.name,
-          email: res.data.email,
+          name: res.data.name || '',
+          email: res.data.email || '',
           bio: res.data.bio || '',
           profilePicture: res.data.profilePicture || ''
         });
+        
+        setIsLoading(false);
       } catch (err) {
-        console.error(err);
+        console.error('Error fetching profile:', err);
+        setIsLoading(false);
+        
+        // If we get a 401 error, the token is invalid/expired
+        if (err.response?.status === 401) {
+          logout();
+        }
       }
     };
-    if (user) fetchProfile();
-  }, [user]);
+    
+    if (user) {
+      fetchProfile();
+    }
+  }, [user, loading, router, logout]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -54,24 +77,49 @@ export default function ProfilePage() {
     e.preventDefault();
     setStatus('');
 
+    // Check if user is still logged in before submitting
+    if (!user?.token) {
+      setStatus('You must be logged in to update your profile.');
+      return;
+    }
+
     try {
       const config = {
         headers: {
           Authorization: `Bearer ${user.token}`
         }
       };
+      
       await axios.put(`${process.env.NEXT_PUBLIC_API_URL}/users/profile`, formData, config);
       setStatus('Profile updated successfully!');
     } catch (err) {
-      console.error(err);
-      setStatus('Failed to update profile.');
+      console.error('Error updating profile:', err);
+      
+      if (err.response?.status === 401) {
+        // If unauthorized, logout the user
+        logout();
+        return;
+      }
+      
+      setStatus('Failed to update profile. ' + (err.response?.data?.message || ''));
     }
   };
 
   const handleLogout = () => {
     logout();
-    router.push('/login');
   };
+
+  // Display loading state
+  if (loading || isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6 flex justify-center items-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading profile data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -131,7 +179,13 @@ export default function ProfilePage() {
           />
         </div>
 
-        {status && <p className="text-sm text-green-600">{status}</p>}
+        {status && (
+          <div className={`text-sm p-3 rounded ${
+            status.includes('success') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+          }`}>
+            {status}
+          </div>
+        )}
 
         <button
           type="submit"

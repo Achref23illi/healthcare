@@ -6,10 +6,10 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import PatientDashboardLayout from '@/components/PatientDashboardLayout';
 import Link from 'next/link';
-import { User, Heart, Activity, Thermometer, Droplet, Calendar, Clock, AlertCircle, FileText, Pill, CheckCircle, Lungs } from 'lucide-react';
+import { User, Heart, Activity, Thermometer, Droplet, Calendar, Clock, AlertCircle, FileText, Pill, CheckCircle } from 'lucide-react';
 
 export default function PatientDashboard() {
-  const { user, loading } = useAuth();
+  const { user, loading, logout } = useAuth();
   const router = useRouter();
   const [doctor, setDoctor] = useState(null);
   const [vitals, setVitals] = useState(null);
@@ -64,7 +64,12 @@ export default function PatientDashboard() {
     { id: 1, doctor: "Dr. Sarah Johnson", specialization: "Cardiologist", date: "Mar 24, 2025", time: "10:00 AM" },
     { id: 2, doctor: "Dr. Robert Chen", specialization: "General Physician", date: "Apr 2, 2025", time: "2:30 PM" }
   ];
+  // Guard to prevent accessing properties on null user
+  if (!loading && !user) {
+    return null;
+  }
 
+  // Sample data for upcoming appointments
   // Sample data for medications
   const medications = [
     { id: 1, name: "Lisinopril", dosage: "10mg", frequency: "Once daily", time: "8:00 AM", status: "taken" },
@@ -90,7 +95,7 @@ export default function PatientDashboard() {
         <div className="mb-8 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl shadow-md overflow-hidden">
           <div className="px-6 py-8 md:flex md:items-center md:justify-between">
             <div className="text-white">
-              <h1 className="text-2xl font-bold mb-2">Hello, {user.name}</h1>
+              <h1 className="text-2xl font-bold mb-2">Hello, {user?.name}</h1>
               <p className="text-purple-100">
                 Welcome to your personal health dashboard
               </p>
@@ -211,35 +216,33 @@ export default function PatientDashboard() {
               </div>
               <p className="mt-2 text-xs text-gray-500">Updated {vitals.oxygenSaturation.time}</p>
             </div>
-
-            {/* Respiratory Rate Card */}
-            <div className="bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-100">
-              <div className="flex items-center mb-3">
-                <div className="bg-green-100 p-2 rounded-lg">
-                  <Lungs className="text-green-600 h-5 w-5" />
+                  <div className="bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-100">
+                    <div className="flex items-center mb-3">
+                    <div className="bg-green-100 p-2 rounded-lg">
+                      <Activity className="text-green-600 h-5 w-5" />
+                    </div>
+                    <h3 className="ml-2 text-sm font-medium text-gray-700">Respiratory Rate</h3>
+                    </div>
+                    <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-2xl font-bold text-gray-900">{vitals.respiratoryRate.value}</p>
+                      <p className="text-xs text-gray-500">{vitals.respiratoryRate.unit}</p>
+                    </div>
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      vitals.respiratoryRate.status === 'normal' ? 'bg-green-100 text-green-800' : 
+                      vitals.respiratoryRate.status === 'warning' ? 'bg-yellow-100 text-yellow-800' : 
+                      'bg-red-100 text-red-800'
+                    }`}>
+                      {vitals.respiratoryRate.status === 'normal' ? 'Normal' : 
+                       vitals.respiratoryRate.status === 'warning' ? 'Warning' : 'Critical'}
+                    </span>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-500">Updated {vitals.respiratoryRate.time}</p>
+                  </div>
+                  </div>
                 </div>
-                <h3 className="ml-2 text-sm font-medium text-gray-700">Respiratory Rate</h3>
-              </div>
-              <div className="flex justify-between items-end">
-                <div>
-                  <p className="text-2xl font-bold text-gray-900">{vitals.respiratoryRate.value}</p>
-                  <p className="text-xs text-gray-500">{vitals.respiratoryRate.unit}</p>
-                </div>
-                <span className={`text-xs px-2 py-1 rounded-full ${
-                  vitals.respiratoryRate.status === 'normal' ? 'bg-green-100 text-green-800' : 
-                  vitals.respiratoryRate.status === 'warning' ? 'bg-yellow-100 text-yellow-800' : 
-                  'bg-red-100 text-red-800'
-                }`}>
-                  {vitals.respiratoryRate.status === 'normal' ? 'Normal' : 
-                   vitals.respiratoryRate.status === 'warning' ? 'Warning' : 'Critical'}
-                </span>
-              </div>
-              <p className="mt-2 text-xs text-gray-500">Updated {vitals.respiratoryRate.time}</p>
-            </div>
-          </div>
-        </div>
 
-        {/* Main Content Areas */}
+                {/* Main Content Areas */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Your Doctor */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">

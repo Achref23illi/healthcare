@@ -50,6 +50,13 @@ export default function DoctorDashboard() {
     { id: 3, patient: "Michael Davis", date: "Mar 25, 9:15 AM", purpose: "Consultation", avatar: "/images/avatars/3.jpg" },
   ];
 
+  // Guard to prevent accessing properties on null user
+  if (!loading && !user) {
+    return null;
+  }
+
+  // Sample data for upcoming appointments
+
   // Sample data for recent activities
   const recentActivities = [
     { id: 1, type: 'vitals', patient: "John Smith", action: "Recorded vitals", time: "2 hours ago", status: "normal" },
@@ -74,7 +81,9 @@ export default function DoctorDashboard() {
         {/* Page Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Welcome back, Dr. {user.name.split(' ')[0]}</h1>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Welcome back, Dr. {user?.name.split(' ')[0]}
+            </h1>
             <p className="mt-1 text-sm text-gray-500">
               Here&apos;s an overview of your practice and patients.
             </p>

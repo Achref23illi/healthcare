@@ -16,11 +16,21 @@ export default function LoginPage() {
   const router = useRouter();
 
   // Check if user is already logged in
-  useEffect(() => {
-    if (user) {
+  // Add this near the top of your component where other useEffects are defined
+useEffect(() => {
+  // Check if user is already logged in
+  if (user) {
+    const wasManualLogout = sessionStorage.getItem('manual_logout');
+    
+    // Only redirect if not coming from a manual logout
+    if (!wasManualLogout) {
       redirectBasedOnRole(user.role);
+    } else {
+      // Clear the flag if we're on the login page
+      sessionStorage.removeItem('manual_logout');
     }
-  }, [user]);
+  }
+}, [user]);
 
   const redirectBasedOnRole = (role) => {
     if (role === 'doctor') {

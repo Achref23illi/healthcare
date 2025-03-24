@@ -13,6 +13,10 @@ export default function PatientDashboardLayout({ children }) {
   
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [healthStats, setHealthStats] = useState({
+    heartRate: '75 bpm',
+    temperature: '36.5°C'
+  });
 
   useEffect(() => {
     // If not logged in, redirect to login
@@ -102,14 +106,14 @@ export default function PatientDashboardLayout({ children }) {
                 <Heart className="h-5 w-5 text-pink-500 mr-2" />
                 <span className="text-sm font-medium text-gray-900">Heart Rate</span>
               </div>
-              <span className="text-sm font-bold text-gray-900">75 bpm</span>
+              <span className="text-sm font-bold text-gray-900">{healthStats.heartRate}</span>
             </div>
             <div className="flex justify-between items-center mt-2">
               <div className="flex items-center">
                 <Thermometer className="h-5 w-5 text-pink-500 mr-2" />
                 <span className="text-sm font-medium text-gray-900">Temperature</span>
               </div>
-              <span className="text-sm font-bold text-gray-900">36.5°C</span>
+              <span className="text-sm font-bold text-gray-900">{healthStats.temperature}</span>
             </div>
           </div>
           
