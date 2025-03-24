@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import PatientDashboardLayout from '@/components/PatientDashboardLayout';
 import Link from 'next/link';
-import { User, Heart, Activity, Thermometer, Droplet, Calendar, Clock, AlertCircle, FileText, Pill, CheckCircle } from 'lucide-react';
+import { User, Heart, Activity, Thermometer, Droplet, Calendar, Clock, AlertCircle, FileText, Pill, CheckCircle, Lungs } from 'lucide-react';
 
 export default function PatientDashboard() {
   const { user, loading } = useAuth();
