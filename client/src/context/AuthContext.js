@@ -318,3 +318,62 @@ export const useAuth = () => {
   }
   return context;
 };
+
+// This shows how to update the AuthContext.js file to handle role-based redirects
+
+// In src/context/AuthContext.js
+// Add this function to handle role-based redirects after login
+
+const redirectBasedOnRole = (userData, router) => {
+  if (userData.role === 'doctor') {
+    router.push('/dashboard');
+  } else if (userData.role === 'patient') {
+    router.push('/patient-dashboard');
+  }
+};
+
+// Update the login function to use this redirect
+const login = async (email, password) => {
+  if (!mounted) return;
+  try {
+    setLoading(true);
+    setError(null);
+    
+    console.log('Sending login request to server...');
+    const response = await axios.post(
+      `${process.env.NEXT_PUBLIC_API_URL}/auth/login`, 
+      { email, password }
+    );
+    
+    const data = response.data;
+    console.log('Login successful, received data:', data);
+    
+    // Verify the response has role and token
+    if (!data.role || !data.token) {
+      throw new Error('Invalid response from server');
+    }
+    
+    // Save to localStorage
+    localStorage.setItem('user', JSON.stringify(data));
+    
+    // Update context state
+    setUser(data);
+    console.log('User state updated in context');
+    
+    // Redirect based on role
+    redirectBasedOnRole(data, router);
+    
+    return data;
+  } catch (error) {
+    console.error('Login error in context:', error);
+    setError(
+      error.response?.data?.message || 
+      'Login failed. Please check your credentials.'
+    );
+    throw error;
+  } finally {
+    setLoading(false);
+  }
+};
+
+// Similarly, update the register function to use this redirect after successful registration

@@ -5,7 +5,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Filter, ArrowLeft, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
-import RoleBasedLayout from '@/components/RoleBasedLayout';
 
 export default function Alerts() {
   const { user } = useAuth();
@@ -170,17 +169,14 @@ export default function Alerts() {
 
   if (isLoading) {
     return (
-      <RoleBasedLayout>
         <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#0c3948]"></div>
           <p className="mt-4 text-gray-600">Loading alerts...</p>
         </div>
-      </RoleBasedLayout>
     );
   }
 
   return (
-    <RoleBasedLayout>
       <div className="max-w-7xl mx-auto">
         {/* Page Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
@@ -463,6 +459,5 @@ export default function Alerts() {
           </div>
         </div>
       </div>
-    </RoleBasedLayout>
   );
 }
