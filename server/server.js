@@ -38,6 +38,7 @@ mongoose.connect(process.env.MONGO_URI, {})
   process.exit(1);
 });
 
+
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
@@ -45,6 +46,7 @@ app.use('/api/patients', require('./routes/patientsRoutes'));
 app.use('/api/vitals', require('./routes/vitalRoutes'));
 app.use('/api/alerts', require('./routes/alertRoutes'));
 app.use('/api/analytics', require('./routes/analyticsRoutes'));
+app.use('/api/appointments', require('./routes/appointmentRoutes'));
 
 // Basic route for testing
 app.get('/', (req, res) => {

@@ -98,28 +98,28 @@ export default function DoctorDashboardLayout({ children }) {
           {/* Navigation Links */}
           <nav className="flex-grow px-4 py-5 overflow-y-auto">
             <ul className="space-y-1">
-              {navLinks.map((link, index) => (
-                <li key={index}>
-                  <Link 
-                    href={link.href} 
-                    className={`flex items-center px-4 py-3 rounded-lg transition-colors duration-200 ${
-                      pathname === link.href 
-                        ? 'bg-indigo-50 text-indigo-700' 
-                        : 'text-gray-700 hover:bg-gray-100'
-                    }`}
-                  >
-                    <span className="mr-3">{link.icon}</span>
-                    <span className="font-medium">{link.text}</span>
-                    
-                    {/* Notification Badge for Alerts */}
-                    {link.text === 'Alerts' && (
-                      <span className="ml-auto bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                        3
-                      </span>
-                    )}
-                  </Link>
-                </li>
-              ))}
+            {navLinks.map((link, index) => (
+  <li key={index}>
+    <Link 
+      href={link.href}
+      className={`flex items-center px-4 py-3 rounded-lg transition-colors duration-200 ${
+        pathname === link.href 
+          ? 'bg-indigo-50 text-indigo-700' 
+          : 'text-gray-700 hover:bg-gray-100'
+      }`}
+    >
+      <span className="mr-3">{link.icon}</span>
+      <span className="font-medium">{link.text}</span>
+      
+      {/* Notification Badge for Alerts */}
+      {link.text === 'Alerts' && (
+        <span className="ml-auto bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+          3
+        </span>
+      )}
+    </Link>
+  </li>
+))}
             </ul>
           </nav>
           
