@@ -1,10 +1,12 @@
 'use client';
 
 import { useAuth } from '@/context/AuthContext';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, User, Users, Bell, BarChart, Home, Thermometer, Menu, Settings, Activity, Calendar, PieChart } from 'lucide-react';
+import axios from 'axios';
+import { LogOut, User, Users, Bell, BarChart, Home, Thermometer, Menu, Settings, 
+         Activity, Calendar, PieChart, AlertCircle, CheckCircle, Plus } from 'lucide-react';
 
 export default function DoctorDashboardLayout({ children }) {
   const { user, loading, logout } = useAuth();
@@ -13,6 +15,12 @@ export default function DoctorDashboardLayout({ children }) {
   
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [alertsDropdownOpen, setAlertsDropdownOpen] = useState(false);
+  const [alertCount, setAlertCount] = useState(0);
+  const [alerts, setAlerts] = useState([]);
+
+  const alertsDropdownRef = useRef(null);
+  const profileDropdownRef = useRef(null);
 
   useEffect(() => {
     // If not logged in, redirect to login
@@ -27,9 +35,91 @@ export default function DoctorDashboardLayout({ children }) {
     }
   }, [user, loading, router]);
 
+  // Fetch alerts data
+  useEffect(() => {
+    if (user?.token) {
+      const fetchAlerts = async () => {
+        try {
+          const config = {
+            headers: {
+              Authorization: `Bearer ${user.token}`
+            }
+          };
+          
+          // Fetch recent alerts (New status only)
+          const response = await axios.get(
+            `${process.env.NEXT_PUBLIC_API_URL}/alerts?status=New`,
+            config
+          );
+          
+          // Set alert count and actual alerts data
+          const alertsData = response.data;
+          setAlerts(alertsData);
+          setAlertCount(alertsData.length);
+        } catch (error) {
+          console.error('Error fetching alerts:', error);
+        }
+      };
+
+      fetchAlerts();
+      
+      // Set up an interval to refresh alerts periodically
+      const intervalId = setInterval(fetchAlerts, 60000); // Refresh every minute
+      
+      // Clean up interval on component unmount
+      return () => clearInterval(intervalId);
+    }
+  }, [user]);
+
+  // Handle click outside for alerts dropdown
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (alertsDropdownRef.current && !alertsDropdownRef.current.contains(event.target)) {
+        setAlertsDropdownOpen(false);
+      }
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target)) {
+        setProfileDropdownOpen(false);
+      }
+    }
+
+    // Add event listener when dropdown is open
+    if (alertsDropdownOpen || profileDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    
+    // Clean up
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [alertsDropdownOpen, profileDropdownOpen]);
+
+  // Handle alert click to navigate to patient profile
+  const handleAlertClick = (alert) => {
+    setAlertsDropdownOpen(false);
+    
+    // Check if alert contains a patient ID
+    if (alert.patient) {
+      router.push(`/dashboard/patients/vitals/${alert.patient}`);
+    } else {
+      // Fallback if patient ID is not available
+      router.push('/dashboard/alerts');
+    }
+  };
+
   const handleLogout = () => {
     logout();
     router.push('/login');
+  };
+
+  // Format timestamp for alerts
+  const formatTimestamp = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   // Display loading state
@@ -99,27 +189,27 @@ export default function DoctorDashboardLayout({ children }) {
           <nav className="flex-grow px-4 py-5 overflow-y-auto">
             <ul className="space-y-1">
             {navLinks.map((link, index) => (
-  <li key={index}>
-    <Link 
-      href={link.href}
-      className={`flex items-center px-4 py-3 rounded-lg transition-colors duration-200 ${
-        pathname === link.href 
-          ? 'bg-indigo-50 text-indigo-700' 
-          : 'text-gray-700 hover:bg-gray-100'
-      }`}
-    >
-      <span className="mr-3">{link.icon}</span>
-      <span className="font-medium">{link.text}</span>
-      
-      {/* Notification Badge for Alerts */}
-      {link.text === 'Alerts' && (
-        <span className="ml-auto bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-          3
-        </span>
-      )}
-    </Link>
-  </li>
-))}
+              <li key={index}>
+                <Link 
+                  href={link.href}
+                  className={`flex items-center px-4 py-3 rounded-lg transition-colors duration-200 ${
+                    pathname === link.href 
+                      ? 'bg-indigo-50 text-indigo-700' 
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <span className="mr-3">{link.icon}</span>
+                  <span className="font-medium">{link.text}</span>
+                  
+                  {/* Dynamic Notification Badge for Alerts */}
+                  {link.text === 'Alerts' && alertCount > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                      {alertCount}
+                    </span>
+                  )}
+                </Link>
+              </li>
+            ))}
             </ul>
           </nav>
           
@@ -167,20 +257,117 @@ export default function DoctorDashboardLayout({ children }) {
             
             {/* Action Icons */}
             <div className="flex items-center space-x-4">
-              {/* Notifications */}
+              {/* Notifications Dropdown */}
               <div className="relative">
-                <button className="p-2 rounded-full hover:bg-gray-100 text-gray-600 focus:outline-none">
+                <button 
+                  className="p-2 rounded-full hover:bg-gray-100 text-gray-600 focus:outline-none"
+                  onClick={() => {
+                    setAlertsDropdownOpen(!alertsDropdownOpen);
+                    setProfileDropdownOpen(false);
+                  }}
+                >
                   <Bell className="h-6 w-6" />
-                  <span className="absolute top-0 right-0 h-4 w-4 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">
-                    3
-                  </span>
+                  {alertCount > 0 && (
+                    <span className="absolute top-0 right-0 h-4 w-4 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">
+                      {alertCount}
+                    </span>
+                  )}
                 </button>
+                
+                {/* Alerts Dropdown Menu */}
+                {alertsDropdownOpen && (
+                  <div ref={alertsDropdownRef} className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl py-1 z-30 max-h-96 overflow-y-auto">
+                    <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                      <h3 className="text-sm font-medium text-gray-700">Notifications</h3>
+                      {alertCount > 0 && (
+                        <span className="text-xs px-2 py-0.5 bg-red-100 text-red-800 rounded-full">
+                          {alertCount} new
+                        </span>
+                      )}
+                    </div>
+                    
+                    {alerts.length > 0 ? (
+                      <div>
+                        {alerts.map((alert) => (
+                          <div 
+                            key={alert._id} 
+                            className="px-4 py-3 hover:bg-gray-50 border-b border-gray-100 cursor-pointer"
+                            onClick={() => handleAlertClick(alert)}
+                          >
+                            <div className="flex items-start">
+                              <div className={`flex-shrink-0 h-8 w-8 rounded-full ${
+                                alert.severity === 'Critical' ? 'bg-red-100' : 
+                                alert.severity === 'High' ? 'bg-orange-100' : 
+                                alert.severity === 'Medium' ? 'bg-yellow-100' : 'bg-blue-100'
+                              } flex items-center justify-center mr-3`}>
+                                <AlertCircle className={`h-4 w-4 ${
+                                  alert.severity === 'Critical' ? 'text-red-600' : 
+                                  alert.severity === 'High' ? 'text-orange-600' : 
+                                  alert.severity === 'Medium' ? 'text-yellow-600' : 'text-blue-600'
+                                }`} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-gray-800 line-clamp-2">{alert.message}</p>
+                                <div className="mt-1 flex justify-between items-center">
+                                  <p className="text-xs text-gray-500">
+                                    {formatTimestamp(alert.createdAt)}
+                                  </p>
+                                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                                    alert.severity === 'Critical' ? 'bg-red-100 text-red-800' : 
+                                    alert.severity === 'High' ? 'bg-orange-100 text-orange-800' : 
+                                    alert.severity === 'Medium' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'
+                                  }`}>
+                                    {alert.severity}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        
+                        <div className="p-3 text-center">
+                          <Link 
+                            href="/dashboard/alerts"
+                            className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
+                            onClick={() => setAlertsDropdownOpen(false)}
+                          >
+                            View all notifications
+                          </Link>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="px-4 py-6 text-center">
+                        <div className="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-gray-100 mb-3">
+                          <CheckCircle className="h-6 w-6 text-gray-400" />
+                        </div>
+                        <p className="text-sm text-gray-500">No new notifications</p>
+                      </div>
+                    )}
+                    
+                    {/* Add New Alert Button */}
+                    <div className="px-4 py-3 border-t border-gray-100">
+                      <button 
+                        className="w-full px-4 py-2 bg-indigo-600 text-white text-xs font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center justify-center"
+                        onClick={() => {
+                          setAlertsDropdownOpen(false);
+                          router.push('/dashboard/alerts?create=true');
+                        }}
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Create New Alert
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
               
               {/* Profile Menu */}
               <div className="relative">
                 <button 
-                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                  onClick={() => {
+                    setProfileDropdownOpen(!profileDropdownOpen);
+                    setAlertsDropdownOpen(false);
+                  }}
                   className="flex items-center focus:outline-none"
                 >
                   <div className="h-9 w-9 rounded-full bg-indigo-100 flex items-center justify-center overflow-hidden">
@@ -192,9 +379,9 @@ export default function DoctorDashboardLayout({ children }) {
                   </div>
                 </button>
                 
-                {/* Dropdown Menu */}
+                {/* Profile Dropdown Menu */}
                 {profileDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                  <div ref={profileDropdownRef} className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-30">
                     <Link 
                       href="/dashboard/settings" 
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
