@@ -50,7 +50,7 @@ export default function DoctorDashboardLayout({ children }) {
     { href: '/dashboard/alerts', icon: <Bell className="w-5 h-5" />, text: 'Alerts' },
     { href: '/dashboard/appointments', icon: <Calendar className="w-5 h-5" />, text: 'Appointments' },
     { href: '/dashboard/analytics', icon: <PieChart className="w-5 h-5" />, text: 'Analytics' },
-    { href: '/dashboard/profile', icon: <Settings className="w-5 h-5" />, text: 'Settings' },
+    { href: '/dashboard/settings', icon: <Settings className="w-5 h-5" />, text: 'Settings' },
   ];
 
   return (
@@ -196,11 +196,11 @@ export default function DoctorDashboardLayout({ children }) {
                 {profileDropdownOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
                     <Link 
-                      href="/dashboard/profile" 
+                      href="/dashboard/settings" 
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                       onClick={() => setProfileDropdownOpen(false)}
                     >
-                      Your Profile
+                      Your Settings
                     </Link>
                     <Link 
                       href="/dashboard/settings" 

@@ -91,7 +91,7 @@ exports.getPatientTrends = async (req, res) => {
     
     // Get new patients over time
     const newPatientsTrend = await Patient.aggregate([
-      { $match: { doctor: mongoose.Types.ObjectId(doctorId) } },
+      { $match: { doctor: new mongoose.Types.ObjectId(doctorId) } },
       { 
         $group: {
           _id: groupByFormat,
@@ -200,19 +200,19 @@ exports.getAppointmentStats = async (req, res) => {
     
     // Get appointments by status
     const appointmentsByStatus = await Appointment.aggregate([
-      { $match: { doctor: mongoose.Types.ObjectId(doctorId) } },
+      { $match: { doctor: new mongoose.Types.ObjectId(doctorId) } },
       { $group: { _id: '$status', count: { $sum: 1 } } }
     ]);
     
     // Get appointments by type
     const appointmentsByType = await Appointment.aggregate([
-      { $match: { doctor: mongoose.Types.ObjectId(doctorId) } },
+      { $match: { doctor: new mongoose.Types.ObjectId(doctorId) } },
       { $group: { _id: '$type', count: { $sum: 1 } } }
     ]);
     
     // Get appointments by day of week
     const appointmentsByDayOfWeek = await Appointment.aggregate([
-      { $match: { doctor: mongoose.Types.ObjectId(doctorId) } },
+      { $match: { doctor: new mongoose.Types.ObjectId(doctorId) } },
       { 
         $group: {
           _id: { $dayOfWeek: '$date' }, // 1 = Sunday, 2 = Monday, etc.

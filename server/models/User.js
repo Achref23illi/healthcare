@@ -30,6 +30,21 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  // Notification settings
+  notificationSettings: {
+    emailAlerts: {
+      type: Boolean,
+      default: true
+    },
+    appNotifications: {
+      type: Boolean,
+      default: true
+    },
+    smsAlerts: {
+      type: Boolean,
+      default: false
+    }
+  },
   // Additional fields for patients
   age: {
     type: Number,
