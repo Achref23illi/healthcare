@@ -5,6 +5,9 @@ const Appointment = require('../models/Appointment');
 const mongoose = require('mongoose');
 
 // Get dashboard summary statistics
+// In server/controllers/analyticsController.js
+// Update the getDashboardStats function
+
 exports.getDashboardStats = async (req, res) => {
   try {
     const doctorId = req.user.id;
@@ -18,11 +21,24 @@ exports.getDashboardStats = async (req, res) => {
       { $group: { _id: '$status', count: { $sum: 1 } } }
     ]);
     
-    // Get alerts by status
-    const alertsByStatus = await Alert.aggregate([
-      { $match: { doctor: doctorId } },
-      { $group: { _id: '$status', count: { $sum: 1 } } }
-    ]);
+    // DEBUGGING: Find all alerts first to verify they exist
+    const allAlerts = await Alert.find({ doctor: doctorId });
+    console.log('Total alerts found:', allAlerts.length);
+    console.log('Alert statuses:', allAlerts.map(a => a.status));
+    
+    // Get alerts by status - simplified approach
+    const alertsByStatus = {};
+    
+    // Count alerts directly instead of using aggregation
+    const newAlerts = await Alert.countDocuments({ doctor: doctorId, status: 'New' });
+    const acknowledgedAlerts = await Alert.countDocuments({ doctor: doctorId, status: 'Acknowledged' });
+    const resolvedAlerts = await Alert.countDocuments({ doctor: doctorId, status: 'Resolved' });
+    
+    console.log('Direct counts - New:', newAlerts, 'Acknowledged:', acknowledgedAlerts, 'Resolved:', resolvedAlerts);
+    
+    alertsByStatus['New'] = newAlerts;
+    alertsByStatus['Acknowledged'] = acknowledgedAlerts;
+    alertsByStatus['Resolved'] = resolvedAlerts;
     
     // Get critical patients
     const criticalPatients = await Patient.find({
@@ -33,12 +49,9 @@ exports.getDashboardStats = async (req, res) => {
     // Format response data
     const formattedPatientsByStatus = {};
     patientsByStatus.forEach(item => {
-      formattedPatientsByStatus[item._id] = item.count;
-    });
-    
-    const formattedAlertsByStatus = {};
-    alertsByStatus.forEach(item => {
-      formattedAlertsByStatus[item._id] = item.count;
+      if (item && item._id) {
+        formattedPatientsByStatus[item._id] = item.count;
+      }
     });
     
     res.json({
@@ -47,7 +60,7 @@ exports.getDashboardStats = async (req, res) => {
         byStatus: formattedPatientsByStatus
       },
       alertStats: {
-        byStatus: formattedAlertsByStatus
+        byStatus: alertsByStatus
       },
       criticalPatients
     });

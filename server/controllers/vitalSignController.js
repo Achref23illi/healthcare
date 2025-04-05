@@ -3,11 +3,21 @@ const Patient = require('../models/Patient');
 const Alert = require('../models/Alert');
 const { validationResult } = require('express-validator');
 
-// Basic thresholds
+// Enhanced thresholds with more comprehensive ranges
 const thresholds = {
   temperature: { low: 35.5, high: 38.0 },
   heartRate: { low: 60, high: 100 },
-  oxygenSaturation: { low: 95, high: 100 }
+  oxygenSaturation: { low: 95, high: 100 },
+  respiratoryRate: { low: 12, high: 20 }, // Added respiratory rate thresholds
+  bloodPressure: { low: '90/60', high: '140/90' } // Added blood pressure thresholds
+};
+
+// Critical thresholds for determining severe alerts
+const criticalThresholds = {
+  temperature: { low: 35.0, high: 39.5 },
+  heartRate: { low: 50, high: 120 },
+  oxygenSaturation: { low: 90, high: 100 },
+  respiratoryRate: { low: 8, high: 25 }
 };
 
 // Add a vital sign reading for a patient
@@ -21,6 +31,8 @@ exports.addVitalSign = async (req, res) => {
     const { patientId } = req.params;
     const { type, value, unit } = req.body;
     
+    console.log(`Recording vital: ${type} = ${value}${unit} for patient ${patientId}`);
+    
     const patient = await Patient.findById(patientId);
     
     if (!patient) {
@@ -33,21 +45,57 @@ exports.addVitalSign = async (req, res) => {
     
     // Check if the value is outside of normal range
     let isAlert = false;
+    let alertSeverity = 'Medium';
+    let createdAlert = null;
+    
     if (thresholds[type]) {
       const { low, high } = thresholds[type];
       isAlert = (value < low || value > high);
       
-      // If it's an alert, create an alert record
+      // Log the value and thresholds for debugging
+      console.log(`Vital check: ${type}, value: ${value}, thresholds: ${low}-${high}, isAlert: ${isAlert}`);
+
+      // If it's an alert, create an alert record with appropriate severity
       if (isAlert) {
+        // Determine if the reading is critical
+        const isCritical = criticalThresholds[type] && 
+          (value < criticalThresholds[type].low || value > criticalThresholds[type].high);
+        
+        // Set severity based on how far outside the range
+        if (isCritical) {
+          alertSeverity = 'Critical';
+        } else {
+          // Calculate deviation percentage for severity determination
+          const midPoint = (low + high) / 2;
+          const deviation = Math.abs(value - midPoint) / midPoint;
+          
+          if (deviation > 0.15) { // More than 15% deviation
+            alertSeverity = 'High';
+          } else if (deviation > 0.05) { // More than 5% deviation
+            alertSeverity = 'Medium';
+          } else {
+            alertSeverity = 'Low';
+          }
+        }
+        
         const alertMessage = `${type} reading of ${value} ${unit} is outside normal range (${low}-${high} ${unit})`;
-        await Alert.create({
-          patient: patientId,
-          doctor: req.user.id,
-          type: 'vital_sign',
-          message: alertMessage,
-          severity: value < low ? 'Low' : 'High',
-          status: 'New'
-        });
+        console.log(`Creating alert with severity: ${alertSeverity}`);
+        
+        try {
+          createdAlert = await Alert.create({
+            patient: patientId,
+            doctor: req.user.id,
+            type: 'vital_sign',
+            message: alertMessage,
+            severity: alertSeverity,
+            status: 'New'
+          });
+          
+          console.log(`Alert created successfully with ID: ${createdAlert._id}`);
+        } catch (alertError) {
+          console.error('Error creating alert:', alertError);
+          // Continue execution even if alert creation fails
+        }
       }
     }
     
@@ -68,26 +116,23 @@ exports.addVitalSign = async (req, res) => {
     
     // Update patient status if needed
     if (isAlert) {
-      const isCritical = (
-        (type === 'temperature' && (value > 39.5 || value < 35)) ||
-        (type === 'heartRate' && (value > 120 || value < 50)) ||
-        (type === 'oxygenSaturation' && value < 90)
-      );
-      
-      if (isCritical) {
+      if (alertSeverity === 'Critical') {
         patient.status = 'Critical';
-      } else if (patient.status !== 'Critical') {
+      } else if (alertSeverity === 'High' && patient.status !== 'Critical') {
         patient.status = 'Under Observation';
       }
       
       await patient.save();
+    } else {
+      await patient.save();
     }
     
-    await patient.save();
-    
+    // Return the created alert along with the vital sign
     res.status(201).json({
       vitalSign,
-      message: isAlert ? 'Vital sign recorded with alert' : 'Vital sign recorded successfully'
+      message: isAlert ? 'Vital sign recorded with alert' : 'Vital sign recorded successfully',
+      alert: createdAlert,
+      alertCreated: !!createdAlert
     });
   } catch (error) {
     console.error('Error adding vital sign:', error);
