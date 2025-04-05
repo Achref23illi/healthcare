@@ -15,7 +15,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const { login, error, user } = useAuth();
+  const { login, error, user, logout } = useAuth();
   const router = useRouter();
 
   // Auto-redirect if already logged in
@@ -24,21 +24,18 @@ export default function LoginPage() {
       const wasManualLogout = sessionStorage.getItem('manual_logout');
       
       if (!wasManualLogout) {
-        redirectBasedOnRole(user.role);
+        if (user.role === 'doctor') {
+          router.push('/dashboard');
+        } else {
+          // If not a doctor, log them out
+          logout();
+          setLoginError('Only doctors can access this application.');
+        }
       } else {
         sessionStorage.removeItem('manual_logout');
       }
     }
-  }, [user]);
-
-  // Handle redirection based on user role
-  const redirectBasedOnRole = (role) => {
-    if (role === 'doctor') {
-      router.push('/dashboard');
-    } else if (role === 'patient') {
-      router.push('/patient-dashboard');
-    }
-  };
+  }, [user, router, logout]);
 
   // Form input change handler
   const handleChange = (e) => {
@@ -60,8 +57,14 @@ export default function LoginPage() {
       // Get user data from authentication
       const userData = await login(formData.email, formData.password);
       
-      // Redirect based on role from server response
-      redirectBasedOnRole(userData.role);
+      // Only allow doctors to login
+      if (userData.role === 'doctor') {
+        router.push('/dashboard');
+      } else {
+        // If not a doctor, log them out and show error
+        logout();
+        setLoginError('Only doctors can access this application.');
+      }
     } catch (err) {
       setLoginError(err?.response?.data?.message || 'Login failed. Please try again.');
     } finally {

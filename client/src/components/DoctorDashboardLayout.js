@@ -29,11 +29,12 @@ export default function DoctorDashboardLayout({ children }) {
       return;
     }
 
-    // If logged in as patient, redirect to patient dashboard
-    if (user && user.role === 'patient') {
-      router.push('/patient-dashboard');
+    // If logged in but not as a doctor, redirect to login
+    if (user && user.role !== 'doctor') {
+      logout();
+      router.push('/login');
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, logout]);
 
   // Fetch alerts data
   useEffect(() => {
@@ -97,11 +98,17 @@ export default function DoctorDashboardLayout({ children }) {
   const handleAlertClick = (alert) => {
     setAlertsDropdownOpen(false);
     
-    // Check if alert contains a patient ID
-    if (alert.patient) {
-      router.push(`/dashboard/patients/vitals/${alert.patient}`);
-    } else {
-      // Fallback if patient ID is not available
+    try {
+      // Check if alert contains a patient ID that's valid
+      if (alert.patient && typeof alert.patient === 'string' && alert.patient.length > 0) {
+        // Navigate directly to patient vitals page
+        router.push(`/dashboard/patients/vitals/${alert.patient}`);
+      } else {
+        // Fallback to alerts page if no patient or invalid patient ID
+        router.push('/dashboard/alerts');
+      }
+    } catch (error) {
+      console.error('Error handling alert click:', error);
       router.push('/dashboard/alerts');
     }
   };

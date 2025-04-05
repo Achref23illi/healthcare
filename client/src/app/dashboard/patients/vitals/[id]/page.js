@@ -14,6 +14,7 @@ export default function RecordVitals() {
   const { user } = useAuth();
   const [patient, setPatient] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [vitalSign, setVitalSign] = useState({
     type: 'temperature',
     value: '',
@@ -44,7 +45,13 @@ export default function RecordVitals() {
         setIsLoading(false);
       } catch (error) {
         console.error('Error fetching patient:', error);
+        setError(error.response?.data?.message || 'Patient not found or access denied');
         setIsLoading(false);
+        
+        // Redirect to manage patients page after 3 seconds if patient not found
+        setTimeout(() => {
+          router.push('/dashboard/patients/manage_patients');
+        }, 3000);
       }
     };
     
@@ -123,6 +130,52 @@ export default function RecordVitals() {
         <div className="flex justify-center items-center h-full">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
           <p className="ml-3 text-gray-600">Loading patient data...</p>
+        </div>
+      </DoctorDashboardLayout>
+    );
+  }
+  
+  if (error) {
+    return (
+      <DoctorDashboardLayout>
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-white shadow-lg rounded-lg p-6 mb-6">
+            <div className="text-center">
+              <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">Error</h2>
+              <p className="text-gray-600 mb-4">{error}</p>
+              <p className="text-gray-500 mb-4">Redirecting to patient management...</p>
+              <button
+                onClick={() => router.push('/dashboard/patients/manage_patients')}
+                className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                Go to Patient Management
+              </button>
+            </div>
+          </div>
+        </div>
+      </DoctorDashboardLayout>
+    );
+  }
+
+  // Check if patient exists before accessing its properties
+  if (!patient) {
+    return (
+      <DoctorDashboardLayout>
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-white shadow-lg rounded-lg p-6 mb-6">
+            <div className="text-center">
+              <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">Patient Not Found</h2>
+              <p className="text-gray-600 mb-4">The patient you&apos;re looking for doesn&apos;t exist or has been removed.</p>
+              <button
+                onClick={() => router.push('/dashboard/patients/manage_patients')}
+                className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                Go to Patient Management
+              </button>
+            </div>
+          </div>
         </div>
       </DoctorDashboardLayout>
     );
