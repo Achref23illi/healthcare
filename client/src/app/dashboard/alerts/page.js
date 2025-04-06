@@ -1,655 +1,1159 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import axios from 'axios';
+import { 
+  Bell, 
+  AlertTriangle, 
+  AlertCircle, 
+  CheckCircle, 
+  X, 
+  User, 
+  Search, 
+  Filter, 
+  ChevronDown, 
+  ChevronUp, 
+  Heart,
+  Thermometer,
+  Percent,
+  Calendar,
+  Clock,
+  EyeOff,
+  MoreHorizontal,
+  ArrowUpDown,
+  RefreshCw,
+  MessageSquare,
+  ExternalLink,
+  Info
+} from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { 
-  Filter, 
-  ArrowLeft, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
-  AlertCircle,
-  Search,
-  ChevronDown,
-  UserRound,
-  MessageSquare,
-  Calendar
-} from 'lucide-react';
 import DoctorDashboardLayout from '@/components/DoctorDashboardLayout';
 
-export default function Alerts() {
-  const { user } = useAuth();
+export default function AlertsPage() {
+  const { user, logout } = useAuth();
   const router = useRouter();
   
-  // State management
+  // Refs for clickable elements
+  const filterMenuRef = useRef(null);
+  const actionsMenuRef = useRef(null);
+
+  // State for alerts
   const [alerts, setAlerts] = useState([]);
+  const [filteredAlerts, setFilteredAlerts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [filter, setFilter] = useState({
-    status: '',
-    severity: '',
-    search: ''
+  const [error, setError] = useState(null);
+
+  // UI state
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'descending' });
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+  const [openActions, setOpenActions] = useState(null);
+  const [filters, setFilters] = useState({
+    type: 'all',
+    priority: 'all',
+    status: 'all'
   });
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [selectedAlerts, setSelectedAlerts] = useState([]);
   const [stats, setStats] = useState({
-    total: 0,
-    new: 0,
-    acknowledged: 0,
+    critical: 0,
+    warning: 0,
+    info: 0,
     resolved: 0
   });
-  const [currentPage, setCurrentPage] = useState(1);
-  const [sortConfig, setSortConfig] = useState({
-    key: 'createdAt',
-    direction: 'desc'
-  });
-  
-  const ITEMS_PER_PAGE = 10;
 
-  // Fetch alerts data
+  // Check authentication and role
   useEffect(() => {
     if (!user) {
       router.push('/login');
       return;
     }
     
+    if (user.role !== 'doctor') {
+      router.push('/patient-dashboard');
+    }
+  }, [user, router]);
+
+  // Sample data to simulate alerts
+  useEffect(() => {
     const fetchAlerts = async () => {
+      // In a real app, this would be an API call to fetch alerts
       try {
-        const config = {
-          headers: {
-            Authorization: `Bearer ${user.token}`
+        setIsLoading(true);
+        
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        // Sample data - in a real app, this would come from your API
+        const mockAlerts = [
+          {
+            _id: '1',
+            type: 'vital_sign',
+            patientId: {
+              _id: 'p1',
+              firstName: 'John',
+              lastName: 'Doe',
+              age: 67
+            },
+            title: 'High Blood Pressure',
+            description: 'Patient\'s blood pressure is 160/95 mmHg, significantly above normal range.',
+            priority: 'critical',
+            status: 'unread',
+            vitalSign: {
+              type: 'blood_pressure',
+              value: '160/95',
+              unit: 'mmHg',
+              threshold: '140/90'
+            },
+            createdAt: new Date('2023-06-10T10:23:00'),
+            updatedAt: new Date('2023-06-10T10:23:00')
+          },
+          {
+            _id: '2',
+            type: 'vital_sign',
+            patientId: {
+              _id: 'p2',
+              firstName: 'Jane',
+              lastName: 'Smith',
+              age: 45
+            },
+            title: 'Low Oxygen Saturation',
+            description: 'Oxygen saturation dropped to 91%, below the normal threshold.',
+            priority: 'critical',
+            status: 'unread',
+            vitalSign: {
+              type: 'oxygen_saturation',
+              value: '91',
+              unit: '%',
+              threshold: '95'
+            },
+            createdAt: new Date('2023-06-09T14:45:00'),
+            updatedAt: new Date('2023-06-09T14:45:00')
+          },
+          {
+            _id: '3',
+            type: 'medication',
+            patientId: {
+              _id: 'p3',
+              firstName: 'Robert',
+              lastName: 'Johnson',
+              age: 58
+            },
+            title: 'Medication Refill Required',
+            description: 'Patient\'s hypertension medication needs to be refilled within 3 days.',
+            priority: 'warning',
+            status: 'unread',
+            medication: {
+              name: 'Lisinopril',
+              dosage: '10mg',
+              refillDate: new Date('2023-06-13')
+            },
+            createdAt: new Date('2023-06-08T09:15:00'),
+            updatedAt: new Date('2023-06-08T09:15:00')
+          },
+          {
+            _id: '4',
+            type: 'appointment',
+            patientId: {
+              _id: 'p4',
+              firstName: 'Sarah',
+              lastName: 'Williams',
+              age: 35
+            },
+            title: 'Upcoming Follow-up Appointment',
+            description: 'Scheduled follow-up for post-surgery recovery assessment.',
+            priority: 'info',
+            status: 'read',
+            appointment: {
+              date: new Date('2023-06-15T11:00:00'),
+              type: 'follow-up',
+              location: 'Main Clinic'
+            },
+            createdAt: new Date('2023-06-07T16:30:00'),
+            updatedAt: new Date('2023-06-07T16:30:00')
+          },
+          {
+            _id: '5',
+            type: 'vital_sign',
+            patientId: {
+              _id: 'p5',
+              firstName: 'Michael',
+              lastName: 'Brown',
+              age: 72
+            },
+            title: 'Elevated Heart Rate',
+            description: 'Heart rate consistently above 100 BPM at rest over the last 24 hours.',
+            priority: 'warning',
+            status: 'in_progress',
+            vitalSign: {
+              type: 'heart_rate',
+              value: '110',
+              unit: 'BPM',
+              threshold: '100'
+            },
+            createdAt: new Date('2023-06-06T08:20:00'),
+            updatedAt: new Date('2023-06-06T13:45:00')
+          },
+          {
+            _id: '6',
+            type: 'lab_result',
+            patientId: {
+              _id: 'p6',
+              firstName: 'Emily',
+              lastName: 'Davis',
+              age: 41
+            },
+            title: 'Abnormal Blood Test Results',
+            description: 'Liver function tests show elevated ALT and AST levels.',
+            priority: 'warning',
+            status: 'resolved',
+            labResult: {
+              test: 'Liver Function',
+              abnormal: ['ALT', 'AST'],
+              resultDate: new Date('2023-06-05')
+            },
+            createdAt: new Date('2023-06-05T09:30:00'),
+            updatedAt: new Date('2023-06-05T15:20:00')
+          },
+          {
+            _id: '7',
+            type: 'message',
+            patientId: {
+              _id: 'p7',
+              firstName: 'David',
+              lastName: 'Wilson',
+              age: 53
+            },
+            title: 'Patient Message - Medication Side Effects',
+            description: 'Patient reporting dizziness and nausea after starting new medication.',
+            priority: 'warning',
+            status: 'in_progress',
+            message: {
+              content: 'I\'ve been feeling dizzy and nauseated since starting the new medication you prescribed. Should I continue taking it?',
+              date: new Date('2023-06-04T11:15:00')
+            },
+            createdAt: new Date('2023-06-04T11:15:00'),
+            updatedAt: new Date('2023-06-04T14:20:00')
+          },
+          {
+            _id: '8',
+            type: 'vital_sign',
+            patientId: {
+              _id: 'p8',
+              firstName: 'Linda',
+              lastName: 'Taylor',
+              age: 65
+            },
+            title: 'High Temperature',
+            description: 'Patient temperature measured at 39.2°C, indicating fever.',
+            priority: 'critical',
+            status: 'resolved',
+            vitalSign: {
+              type: 'temperature',
+              value: '39.2',
+              unit: '°C',
+              threshold: '38.0'
+            },
+            createdAt: new Date('2023-06-03T17:40:00'),
+            updatedAt: new Date('2023-06-03T19:15:00')
+          },
+          {
+            _id: '9',
+            type: 'system',
+            title: 'System Maintenance',
+            description: 'Scheduled system maintenance on June 12th from 2AM to 4AM. Some features may be unavailable during this time.',
+            priority: 'info',
+            status: 'read',
+            createdAt: new Date('2023-06-02T10:00:00'),
+            updatedAt: new Date('2023-06-02T10:00:00')
+          },
+          {
+            _id: '10',
+            type: 'medication',
+            patientId: {
+              _id: 'p10',
+              firstName: 'Thomas',
+              lastName: 'Anderson',
+              age: 48
+            },
+            title: 'Medication Interaction Warning',
+            description: 'Potential interaction between newly prescribed antibiotic and existing medication.',
+            priority: 'warning',
+            status: 'unread',
+            medication: {
+              name: 'Ciprofloxacin',
+              interactsWith: 'Warfarin'
+            },
+            createdAt: new Date('2023-06-01T13:20:00'),
+            updatedAt: new Date('2023-06-01T13:20:00')
+          },
+          {
+            _id: '11',
+            type: 'lab_result',
+            patientId: {
+              _id: 'p11',
+              firstName: 'Patricia',
+              lastName: 'Moore',
+              age: 62
+            },
+            title: 'Lab Results Available',
+            description: 'Annual check-up lab results are now available for review.',
+            priority: 'info',
+            status: 'read',
+            labResult: {
+              test: 'Comprehensive Panel',
+              resultDate: new Date('2023-05-31')
+            },
+            createdAt: new Date('2023-05-31T14:45:00'),
+            updatedAt: new Date('2023-05-31T14:45:00')
+          },
+          {
+            _id: '12',
+            type: 'appointment',
+            patientId: {
+              _id: 'p12',
+              firstName: 'Jennifer',
+              lastName: 'Lee',
+              age: 39
+            },
+            title: 'Appointment Cancellation',
+            description: 'Patient canceled their appointment scheduled for June 5th.',
+            priority: 'info',
+            status: 'read',
+            appointment: {
+              date: new Date('2023-06-05T10:30:00'),
+              type: 'check-up',
+              action: 'cancelled'
+            },
+            createdAt: new Date('2023-05-30T09:10:00'),
+            updatedAt: new Date('2023-05-30T09:10:00')
           }
-        };
+        ];
         
-        let url = `${process.env.NEXT_PUBLIC_API_URL}/alerts`;
-        const queryParams = [];
-        
-        if (filter.status) queryParams.push(`status=${filter.status}`);
-        if (filter.severity) queryParams.push(`severity=${filter.severity}`);
-        
-        if (queryParams.length > 0) {
-          url += `?${queryParams.join('&')}`;
-        }
-        
-        const response = await axios.get(url, config);
-        
-        const alertsData = response.data.alerts || response.data;
-        
-        // Apply client-side search filtering if search is present
-        let filteredAlerts = alertsData;
-        if (filter.search.trim() !== '') {
-          const searchTerm = filter.search.toLowerCase();
-          filteredAlerts = alertsData.filter(alert => 
-            (alert.message && alert.message.toLowerCase().includes(searchTerm)) ||
-            (alert.patient?.firstName && alert.patient.firstName.toLowerCase().includes(searchTerm)) ||
-            (alert.patient?.lastName && alert.patient.lastName.toLowerCase().includes(searchTerm))
-          );
-        }
-        
-        // Apply sorting
-        filteredAlerts = sortAlerts(filteredAlerts);
-        
-        setAlerts(filteredAlerts);
+        setAlerts(mockAlerts);
+        setFilteredAlerts(mockAlerts);
         
         // Calculate stats
-        setStats({
-          total: alertsData.length,
-          new: alertsData.filter(a => a.status === 'New').length,
-          acknowledged: alertsData.filter(a => a.status === 'Acknowledged').length,
-          resolved: alertsData.filter(a => a.status === 'Resolved').length
-        });
+        const calculatedStats = mockAlerts.reduce((stats, alert) => {
+          if (alert.status === 'resolved') {
+            stats.resolved++;
+          } else if (alert.priority === 'critical') {
+            stats.critical++;
+          } else if (alert.priority === 'warning') {
+            stats.warning++;
+          } else if (alert.priority === 'info') {
+            stats.info++;
+          }
+          return stats;
+        }, { critical: 0, warning: 0, info: 0, resolved: 0 });
         
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Error fetching alerts:', error);
+        setStats(calculatedStats);
+        
+      } catch (err) {
+        console.error('Error fetching alerts:', err);
+        setError('Failed to load alerts. Please try again.');
+      } finally {
         setIsLoading(false);
       }
     };
     
-    fetchAlerts();
-  }, [user, filter.status, filter.severity, filter.search, router, sortConfig]);
+    if (user) {
+      fetchAlerts();
+    }
+  }, [user]);
 
-  // Sort alerts based on current sort configuration
-  const sortAlerts = (alertsToSort) => {
-    return [...alertsToSort].sort((a, b) => {
-      if (sortConfig.key === 'createdAt') {
-        const aTime = new Date(a.createdAt).getTime();
-        const bTime = new Date(b.createdAt).getTime();
-        return sortConfig.direction === 'asc' ? aTime - bTime : bTime - aTime;
-      } else if (sortConfig.key === 'severity') {
-        const severityOrder = { 'Critical': 4, 'High': 3, 'Medium': 2, 'Low': 1 };
-        const aValue = severityOrder[a.severity] || 0;
-        const bValue = severityOrder[b.severity] || 0;
-        return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
-      } else if (sortConfig.key === 'status') {
-        const statusOrder = { 'New': 3, 'Acknowledged': 2, 'Resolved': 1 };
-        const aValue = statusOrder[a.status] || 0;
-        const bValue = statusOrder[b.status] || 0;
-        return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
-      }
-      return 0;
-    });
-  };
-
-  // Handle column sorting
-  const handleSort = (key) => {
-    setSortConfig(prevSort => ({
-      key,
-      direction: prevSort.key === key && prevSort.direction === 'desc' ? 'asc' : 'desc'
-    }));
-  };
-
-  // Handle alert status updates
-  const handleStatusUpdate = async (alertId, newStatus) => {
-    try {
-      if (!user?.token) return;
-      
-      const config = {
-        headers: {
-          Authorization: `Bearer ${user.token}`
-        }
-      };
-      
-      await axios.put(
-        `${process.env.NEXT_PUBLIC_API_URL}/alerts/${alertId}`,
-        { status: newStatus },
-        config
+  // Filter and sort alerts
+  useEffect(() => {
+    if (!alerts.length) return;
+    
+    let result = [...alerts];
+    
+    // Apply search term
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      result = result.filter(alert => 
+        (alert.title && alert.title.toLowerCase().includes(searchLower)) ||
+        (alert.description && alert.description.toLowerCase().includes(searchLower)) ||
+        (alert.patientId && 
+          (`${alert.patientId.firstName} ${alert.patientId.lastName}`).toLowerCase().includes(searchLower))
       );
+    }
+    
+    // Apply filters
+    if (filters.type !== 'all') {
+      result = result.filter(alert => alert.type === filters.type);
+    }
+    
+    if (filters.priority !== 'all') {
+      result = result.filter(alert => alert.priority === filters.priority);
+    }
+    
+    if (filters.status !== 'all') {
+      result = result.filter(alert => alert.status === filters.status);
+    }
+    
+    // Sort results
+    result.sort((a, b) => {
+      const aValue = a[sortConfig.key];
+      const bValue = b[sortConfig.key];
       
-      // Update alerts in state
-      setAlerts(alerts.map(alert => 
-        alert._id === alertId ? { ...alert, status: newStatus } : alert
-      ));
-      
-      // Update stats
-      setStats({
-        ...stats,
-        new: newStatus === 'New' ? stats.new : (stats.new - (alerts.find(a => a._id === alertId).status === 'New' ? 1 : 0)),
-        acknowledged: newStatus === 'Acknowledged' ? stats.acknowledged + 1 : (stats.acknowledged - (alerts.find(a => a._id === alertId).status === 'Acknowledged' ? 1 : 0)),
-        resolved: newStatus === 'Resolved' ? stats.resolved + 1 : (stats.resolved - (alerts.find(a => a._id === alertId).status === 'Resolved' ? 1 : 0))
-      });
-    } catch (error) {
-      console.error('Error updating alert status:', error);
+      if (sortConfig.key === 'createdAt' || sortConfig.key === 'updatedAt') {
+        // Date sorting
+        const dateA = new Date(aValue);
+        const dateB = new Date(bValue);
+        
+        return sortConfig.direction === 'ascending' 
+          ? dateA - dateB 
+          : dateB - dateA;
+      } else {
+        // String and other value sorting
+        if (aValue < bValue) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      }
+    });
+    
+    setFilteredAlerts(result);
+  }, [searchTerm, filters, sortConfig, alerts]);
+
+  // Sorting function
+  const requestSort = (key) => {
+    let direction = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
     }
+    setSortConfig({ key, direction });
   };
 
-  // Get visual styling for severity
-  const getSeverityColor = (severity) => {
-    switch (severity) {
-      case 'Critical': 
-        return {
-          bg: 'bg-red-100',
-          text: 'text-red-800',
-          icon: <AlertCircle className="w-3 h-3 mr-1 text-red-800" />
-        };
-      case 'High': 
-        return {
-          bg: 'bg-orange-100',
-          text: 'text-orange-800',
-          icon: <AlertCircle className="w-3 h-3 mr-1 text-orange-800" />
-        };
-      case 'Medium': 
-        return {
-          bg: 'bg-yellow-100',
-          text: 'text-yellow-800',
-          icon: <AlertCircle className="w-3 h-3 mr-1 text-yellow-800" />
-        };
-      case 'Low': 
-        return {
-          bg: 'bg-blue-100',
-          text: 'text-blue-800',
-          icon: <AlertCircle className="w-3 h-3 mr-1 text-blue-800" />
-        };
-      default: 
-        return {
-          bg: 'bg-gray-100',
-          text: 'text-gray-800',
-          icon: <AlertCircle className="w-3 h-3 mr-1 text-gray-800" />
-        };
-    }
-  };
-  
-  // Get visual styling for status
-  const getStatusInfo = (status) => {
-    switch (status) {
-      case 'New': 
-        return {
-          bg: 'bg-red-100',
-          text: 'text-red-800',
-          icon: <Clock className="w-3 h-3 mr-1 text-red-800" />
-        };
-      case 'Acknowledged': 
-        return {
-          bg: 'bg-yellow-100',
-          text: 'text-yellow-800',
-          icon: <CheckCircle className="w-3 h-3 mr-1 text-yellow-800" />
-        };
-      case 'Resolved': 
-        return {
-          bg: 'bg-green-100',
-          text: 'text-green-800',
-          icon: <CheckCircle className="w-3 h-3 mr-1 text-green-800" />
-        };
-      default: 
-        return {
-          bg: 'bg-gray-100',
-          text: 'text-gray-800',
-          icon: <Clock className="w-3 h-3 mr-1 text-gray-800" />
-        };
-    }
+  // Mark alert as read or in progress
+  const updateAlertStatus = (alertId, newStatus) => {
+    // This would be an API call in a real app
+    setAlerts(alerts.map(alert => 
+      alert._id === alertId 
+        ? { ...alert, status: newStatus, updatedAt: new Date() } 
+        : alert
+    ));
+    setOpenActions(null);
   };
 
-  // Handle search input change
-  const handleSearchChange = (e) => {
-    setFilter({...filter, search: e.target.value});
-    setCurrentPage(1); // Reset to first page on new search
-  };
-
-  // Get paginated alerts
-  const getPaginatedAlerts = () => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return alerts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  // Mark multiple alerts as read
+  const markSelectedAsRead = () => {
+    if (!selectedAlerts.length) return;
+    
+    setAlerts(alerts.map(alert => 
+      selectedAlerts.includes(alert._id) && alert.status === 'unread'
+        ? { ...alert, status: 'read', updatedAt: new Date() } 
+        : alert
+    ));
+    
+    setSelectedAlerts([]);
   };
 
   // Format date for display
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  const formatDate = (date) => {
+    if (!date) return '';
+    
+    const d = new Date(date);
+    const now = new Date();
+    const diffMs = now - d;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffMins < 1) {
+      return 'Just now';
+    } else if (diffMins < 60) {
+      return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+    } else if (diffHours < 24) {
+      return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    } else if (diffDays < 7) {
+      return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    } else {
+      return d.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      });
+    }
   };
 
-  // Loading state
-  if (isLoading) {
+  // Handle selecting all alerts
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedAlerts(filteredAlerts.map(alert => alert._id));
+    } else {
+      setSelectedAlerts([]);
+    }
+  };
+
+  // Handle selecting a single alert
+  const handleSelectAlert = (e, alertId) => {
+    if (e.target.checked) {
+      setSelectedAlerts([...selectedAlerts, alertId]);
+    } else {
+      setSelectedAlerts(selectedAlerts.filter(id => id !== alertId));
+    }
+  };
+
+  // Close all dropdown menus when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (filterMenuRef.current && !filterMenuRef.current.contains(event.target)) {
+        setFilterMenuOpen(false);
+      }
+      
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target)) {
+        setOpenActions(null);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Get icon based on alert type
+  const getAlertTypeIcon = (type) => {
+    switch (type) {
+      case 'vital_sign':
+        return <Heart className="h-5 w-5 text-red-500" />;
+      case 'medication':
+        return <AlertCircle className="h-5 w-5 text-orange-500" />;
+      case 'lab_result':
+        return <Thermometer className="h-5 w-5 text-blue-500" />;
+      case 'appointment':
+        return <Calendar className="h-5 w-5 text-purple-500" />;
+      case 'message':
+        return <MessageSquare className="h-5 w-5 text-green-500" />;
+      case 'system':
+        return <Info className="h-5 w-5 text-gray-500" />;
+      default:
+        return <Bell className="h-5 w-5 text-gray-500" />;
+    }
+  };
+
+  // Get color scheme based on priority
+  const getPriorityColors = (priority) => {
+    switch (priority) {
+      case 'critical':
+        return {
+          bg: 'bg-red-50',
+          text: 'text-red-700',
+          border: 'border-red-200',
+          icon: 'text-red-500',
+          badge: 'bg-red-100 text-red-800'
+        };
+      case 'warning':
+        return {
+          bg: 'bg-amber-50',
+          text: 'text-amber-700',
+          border: 'border-amber-200',
+          icon: 'text-amber-500',
+          badge: 'bg-amber-100 text-amber-800'
+        };
+      case 'info':
+        return {
+          bg: 'bg-blue-50',
+          text: 'text-blue-700',
+          border: 'border-blue-200',
+          icon: 'text-blue-500',
+          badge: 'bg-blue-100 text-blue-800'
+        };
+      default:
+        return {
+          bg: 'bg-gray-50',
+          text: 'text-gray-700',
+          border: 'border-gray-200',
+          icon: 'text-gray-500',
+          badge: 'bg-gray-100 text-gray-800'
+        };
+    }
+  };
+
+  if (!user || user.role !== 'doctor') {
     return (
-      <DoctorDashboardLayout>
-        <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600"></div>
-          <p className="mt-4 text-gray-600">Loading alerts...</p>
-        </div>
-      </DoctorDashboardLayout>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+        <p className="mt-4 text-gray-600">Loading...</p>
+      </div>
     );
   }
 
   return (
     <DoctorDashboardLayout>
       <div className="h-full flex flex-col">
-        {/* Page Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-2">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900 flex items-center">
-              <AlertCircle className="w-5 h-5 mr-2 text-red-500" />
-              Alert Management
-            </h1>
-            <p className="text-xs text-gray-500">
-              Monitor and respond to patient alerts efficiently
-            </p>
-          </div>
-          <div className="flex items-center mt-2 md:mt-0">
-            <div className="relative mr-2">
-              <Search className="h-4 w-4 absolute left-2 top-2.5 text-gray-400" />
-              <input 
-                type="text" 
-                placeholder="Search alerts..." 
-                className="pl-8 pr-4 py-2 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                value={filter.search}
-                onChange={handleSearchChange}
-              />
+        {/* Header */}
+        <div className="bg-white rounded-xl shadow-sm mb-6 overflow-hidden border border-gray-200">
+          <div className="px-6 py-5 flex flex-col md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center mb-4 md:mb-0">
+              <div className="h-10 w-10 bg-indigo-100 rounded-lg flex items-center justify-center mr-4">
+                <Bell className="h-5 w-5 text-indigo-600" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">Alerts & Notifications</h1>
+                <p className="text-sm text-gray-500 mt-0.5">Monitor and manage clinical alerts</p>
+              </div>
             </div>
-            <button 
-              onClick={() => router.back()}
-              className="inline-flex items-center px-3 py-2 text-xs border border-gray-300 shadow-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              <ArrowLeft className="h-3 w-3 mr-1" />
-              Back
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  setIsLoading(true);
+                  setTimeout(() => setIsLoading(false), 500);
+                }}
+                className="inline-flex items-center px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors duration-200 shadow-sm"
+              >
+                <RefreshCw className="mr-1.5 h-4 w-4 text-gray-500" />
+                Refresh
+              </button>
+              {selectedAlerts.length > 0 && (
+                <button
+                  onClick={markSelectedAsRead}
+                  className="inline-flex items-center px-3 py-1.5 bg-indigo-600 border border-transparent rounded-lg text-sm font-medium text-white hover:bg-indigo-700 transition-colors duration-200 shadow-sm"
+                >
+                  <CheckCircle className="mr-1.5 h-4 w-4" />
+                  Mark as Read ({selectedAlerts.length})
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Main Content Area - Single Screen */}
-        <div className="flex-1 flex overflow-hidden">
-          <div className="w-full flex">
-            {/* Left Panel - Stats + Filters */}
-            <div className="w-64 pr-4 flex flex-col space-y-3">
-              {/* Stats Cards */}
-              <div className="bg-white rounded-lg shadow-sm p-3 border border-gray-100">
-                <h3 className="text-xs font-medium text-gray-700 mb-2">Alerts Overview</h3>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center py-1 border-b border-gray-100">
-                    <div className="flex items-center">
-                      <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center mr-2">
-                        <AlertCircle className="h-3 w-3 text-indigo-600" />
-                      </div>
-                      <span className="text-xs text-gray-600">Total</span>
-                    </div>
-                    <span className="text-sm font-semibold">{stats.total}</span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center py-1 border-b border-gray-100">
-                    <div className="flex items-center">
-                      <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center mr-2">
-                        <Clock className="h-3 w-3 text-red-600" />
-                      </div>
-                      <span className="text-xs text-gray-600">New</span>
-                    </div>
-                    <span className="text-sm font-semibold">{stats.new}</span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center py-1 border-b border-gray-100">
-                    <div className="flex items-center">
-                      <div className="w-6 h-6 rounded-full bg-yellow-100 flex items-center justify-center mr-2">
-                        <CheckCircle className="h-3 w-3 text-yellow-600" />
-                      </div>
-                      <span className="text-xs text-gray-600">Acknowledged</span>
-                    </div>
-                    <span className="text-sm font-semibold">{stats.acknowledged}</span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center py-1">
-                    <div className="flex items-center">
-                      <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center mr-2">
-                        <CheckCircle className="h-3 w-3 text-green-600" />
-                      </div>
-                      <span className="text-xs text-gray-600">Resolved</span>
-                    </div>
-                    <span className="text-sm font-semibold">{stats.resolved}</span>
-                  </div>
-                </div>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="bg-red-50 border border-red-100 rounded-xl shadow-sm p-4">
+            <div className="flex items-center">
+              <div className="h-10 w-10 bg-red-100 rounded-lg flex items-center justify-center mr-4">
+                <AlertCircle className="h-5 w-5 text-red-600" />
               </div>
-
-              {/* Filters */}
-              <div className="bg-white rounded-lg shadow-sm p-3 border border-gray-100">
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className="text-xs font-medium text-gray-700">Filter Alerts</h3>
-                  <button
-                    onClick={() => setIsFilterOpen(!isFilterOpen)}
-                    className="inline-flex items-center text-xs text-indigo-600 hover:text-indigo-800"
-                  >
-                    <Filter className="h-3 w-3 mr-1" />
-                    {isFilterOpen ? 'Hide' : 'Show'}
-                  </button>
-                </div>
-                
-                {isFilterOpen && (
-                  <div className="space-y-3">
-                    <div>
-                      <label htmlFor="statusFilter" className="block text-xs font-medium text-gray-700 mb-1">
-                        Status
-                      </label>
-                      <select
-                        id="statusFilter"
-                        value={filter.status}
-                        onChange={(e) => setFilter({...filter, status: e.target.value})}
-                        className="block w-full text-xs pl-3 pr-10 py-1.5 border border-gray-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 rounded-md"
-                      >
-                        <option value="">All Statuses</option>
-                        <option value="New">New</option>
-                        <option value="Acknowledged">Acknowledged</option>
-                        <option value="Resolved">Resolved</option>
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="severityFilter" className="block text-xs font-medium text-gray-700 mb-1">
-                        Severity
-                      </label>
-                      <select
-                        id="severityFilter"
-                        value={filter.severity}
-                        onChange={(e) => setFilter({...filter, severity: e.target.value})}
-                        className="block w-full text-xs pl-3 pr-10 py-1.5 border border-gray-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 rounded-md"
-                      >
-                        <option value="">All Severities</option>
-                        <option value="Critical">Critical</option>
-                        <option value="High">High</option>
-                        <option value="Medium">Medium</option>
-                        <option value="Low">Low</option>
-                      </select>
-                    </div>
-                    
-                    <button 
-                      onClick={() => setFilter({status: '', severity: '', search: ''})}
-                      className="w-full text-xs py-1 text-center text-indigo-600 hover:text-indigo-800 focus:outline-none"
-                    >
-                      Clear Filters
-                    </button>
-                  </div>
-                )}
-              </div>
-              
-              {/* Sort Options */}
-              <div className="bg-white rounded-lg shadow-sm p-3 border border-gray-100">
-                <h3 className="text-xs font-medium text-gray-700 mb-2">Sort By</h3>
-                <div className="space-y-1.5">
-                  <button 
-                    onClick={() => handleSort('createdAt')}
-                    className={`flex w-full items-center justify-between px-2 py-1 text-xs rounded-md ${
-                      sortConfig.key === 'createdAt' ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'
-                    }`}
-                  >
-                    <span className="flex items-center">
-                      <Calendar className="h-3 w-3 mr-1.5" />
-                      Date
-                    </span>
-                    {sortConfig.key === 'createdAt' && (
-                      <ChevronDown className={`h-3 w-3 transform ${sortConfig.direction === 'asc' ? 'rotate-180' : ''}`} />
-                    )}
-                  </button>
-                  
-                  <button 
-                    onClick={() => handleSort('severity')}
-                    className={`flex w-full items-center justify-between px-2 py-1 text-xs rounded-md ${
-                      sortConfig.key === 'severity' ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'
-                    }`}
-                  >
-                    <span className="flex items-center">
-                      <AlertCircle className="h-3 w-3 mr-1.5" />
-                      Severity
-                    </span>
-                    {sortConfig.key === 'severity' && (
-                      <ChevronDown className={`h-3 w-3 transform ${sortConfig.direction === 'asc' ? 'rotate-180' : ''}`} />
-                    )}
-                  </button>
-                  
-                  <button 
-                    onClick={() => handleSort('status')}
-                    className={`flex w-full items-center justify-between px-2 py-1 text-xs rounded-md ${
-                      sortConfig.key === 'status' ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'
-                    }`}
-                  >
-                    <span className="flex items-center">
-                      <CheckCircle className="h-3 w-3 mr-1.5" />
-                      Status
-                    </span>
-                    {sortConfig.key === 'status' && (
-                      <ChevronDown className={`h-3 w-3 transform ${sortConfig.direction === 'asc' ? 'rotate-180' : ''}`} />
-                    )}
-                  </button>
-                </div>
+              <div>
+                <p className="text-sm text-red-700 font-medium">Critical</p>
+                <h3 className="text-2xl font-bold text-gray-900">{stats.critical}</h3>
               </div>
             </div>
-
-            {/* Right Panel - Alerts Table */}
-            <div className="flex-1 bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
-                <h3 className="text-sm font-medium text-gray-700 flex items-center">
-                  All Alerts 
-                  <span className="ml-2 px-1.5 py-0.5 bg-gray-100 text-gray-700 text-xs rounded-full">
-                    {alerts.length}
-                  </span>
-                </h3>
-                <div className="flex items-center text-xs text-gray-500">
-                  <span>Page {currentPage} of {Math.max(1, Math.ceil(alerts.length / ITEMS_PER_PAGE))}</span>
-                  <div className="flex ml-2">
-                    <button 
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className={`px-2 py-1 rounded-l-md border border-r-0 ${
-                        currentPage === 1 
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                          : 'bg-white text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      Prev
-                    </button>
-                    <button 
-                      onClick={() => setCurrentPage(p => Math.min(Math.ceil(alerts.length / ITEMS_PER_PAGE), p + 1))}
-                      disabled={currentPage >= Math.ceil(alerts.length / ITEMS_PER_PAGE)}
-                      className={`px-2 py-1 rounded-r-md border ${
-                        currentPage >= Math.ceil(alerts.length / ITEMS_PER_PAGE) 
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                          : 'bg-white text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
+          </div>
+          
+          <div className="bg-amber-50 border border-amber-100 rounded-xl shadow-sm p-4">
+            <div className="flex items-center">
+              <div className="h-10 w-10 bg-amber-100 rounded-lg flex items-center justify-center mr-4">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
               </div>
-              
-              {/* Alerts Table */}
-              <div className="overflow-auto max-h-[calc(100vh-260px)]">
-                {alerts.length > 0 ? (
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50 sticky top-0 z-10">
-                      <tr>
-                        <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Patient
-                        </th>
-                        <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Message
-                        </th>
-                        <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Severity
-                        </th>
-                        <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
-                        <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Time
-                        </th>
-                        <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200 text-xs">
-                      {getPaginatedAlerts().map((alert) => (
-                        <tr key={alert._id} className="hover:bg-gray-50">
-                          <td className="px-3 py-2 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <div className="h-6 w-6 rounded-full bg-indigo-100 flex items-center justify-center mr-2">
-                                <UserRound className="h-3 w-3 text-indigo-600" />
-                              </div>
-                              <div>
-                                <div className="font-medium text-gray-900 leading-none">
-                                  {alert.patient?.firstName ? 
-                                    `${alert.patient.firstName} ${alert.patient.lastName}` : 
-                                    '(Patient Name)'}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-3 py-2">
-                            <div className="flex items-start max-w-[180px]">
-                              <MessageSquare className="h-3 w-3 text-gray-400 mr-1.5 mt-0.5 flex-shrink-0" />
-                              <div className="text-gray-900 truncate" title={alert.message}>
-                                {alert.message}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getSeverityColor(alert.severity).bg} ${getSeverityColor(alert.severity).text}`}>
-                              {getSeverityColor(alert.severity).icon}
-                              {alert.severity}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusInfo(alert.status).bg} ${getStatusInfo(alert.status).text}`}>
-                              {getStatusInfo(alert.status).icon}
-                              {alert.status}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-gray-500">
-                            {formatDate(alert.createdAt)}
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap">
-                            <div className="flex items-center space-x-2">
-                              {alert.status === 'New' && (
-                                <button 
-                                  onClick={() => handleStatusUpdate(alert._id, 'Acknowledged')}
-                                  className="text-xs px-2 py-1 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 rounded transition-colors duration-150"
-                                >
-                                  Ack
-                                </button>
-                              )}
-                              {alert.status !== 'Resolved' && (
-                                <button 
-                                  onClick={() => handleStatusUpdate(alert._id, 'Resolved')}
-                                  className="text-xs px-2 py-1 text-green-700 bg-green-50 hover:bg-green-100 rounded transition-colors duration-150"
-                                >
-                                  Resolve
-                                </button>
-                              )}
-                              
-                              {alert.patient?._id && (
-                                <Link
-                                  href={`/dashboard/patients/vitals/${alert.patient._id}`}
-                                  className="text-xs px-2 py-1 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded transition-colors duration-150"
-                                >
-                                  Patient
-                                </Link>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-12">
-                    <XCircle className="h-10 w-10 text-gray-400 mb-4" />
-                    <p className="text-base font-medium text-gray-500">No alerts found</p>
-                    <p className="text-sm text-gray-400 mt-1">Try adjusting your filters or check back later</p>
+              <div>
+                <p className="text-sm text-amber-700 font-medium">Warnings</p>
+                <h3 className="text-2xl font-bold text-gray-900">{stats.warning}</h3>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-blue-50 border border-blue-100 rounded-xl shadow-sm p-4">
+            <div className="flex items-center">
+              <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
+                <Info className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm text-blue-700 font-medium">Information</p>
+                <h3 className="text-2xl font-bold text-gray-900">{stats.info}</h3>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-green-50 border border-green-100 rounded-xl shadow-sm p-4">
+            <div className="flex items-center">
+              <div className="h-10 w-10 bg-green-100 rounded-lg flex items-center justify-center mr-4">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm text-green-700 font-medium">Resolved</p>
+                <h3 className="text-2xl font-bold text-gray-900">{stats.resolved}</h3>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Search and Filter Bar */}
+        <div className="bg-white rounded-xl shadow-sm mb-6 p-4 border border-gray-200">
+          <div className="flex flex-col md:flex-row gap-4">
+            {/* Search */}
+            <div className="w-full md:w-1/3 relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400" aria-hidden="true" />
+              </div>
+              <input
+                type="text"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Search alerts..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            
+            {/* Filters */}
+            <div className="flex gap-3 flex-wrap">
+              <div className="relative" ref={filterMenuRef}>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setFilterMenuOpen(!filterMenuOpen);
+                  }}
+                  type="button"
+                  className="flex items-center px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  <Filter className="mr-2 h-4 w-4 text-gray-500" />
+                  Filters
+                  <ChevronDown className="ml-1 h-4 w-4 text-gray-500" />
+                </button>
+                
+                {filterMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                    <div className="p-4">
+                      <div className="flex justify-between items-center mb-3">
+                        <h3 className="text-sm font-medium text-gray-900">Filter Alerts</h3>
+                        <button 
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setFilters({
+                              type: 'all',
+                              priority: 'all',
+                              status: 'all'
+                            });
+                          }}
+                          type="button"
+                          className="text-xs text-indigo-600 hover:text-indigo-800"
+                        >
+                          Reset
+                        </button>
+                      </div>
+                      
+                      {/* Alert Type Filter */}
+                      <div className="mb-3">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Alert Type</label>
+                        <select 
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          value={filters.type}
+                          onChange={(e) => setFilters({...filters, type: e.target.value})}
+                        >
+                          <option value="all">All Types</option>
+                          <option value="vital_sign">Vital Signs</option>
+                          <option value="medication">Medication</option>
+                          <option value="lab_result">Lab Results</option>
+                          <option value="appointment">Appointments</option>
+                          <option value="message">Messages</option>
+                          <option value="system">System</option>
+                        </select>
+                      </div>
+                      
+                      {/* Priority Filter */}
+                      <div className="mb-3">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                        <select 
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          value={filters.priority}
+                          onChange={(e) => setFilters({...filters, priority: e.target.value})}
+                        >
+                          <option value="all">All Priorities</option>
+                          <option value="critical">Critical</option>
+                          <option value="warning">Warning</option>
+                          <option value="info">Information</option>
+                        </select>
+                      </div>
+                      
+                      {/* Status Filter */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                        <select 
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          value={filters.status}
+                          onChange={(e) => setFilters({...filters, status: e.target.value})}
+                        >
+                          <option value="all">All Statuses</option>
+                          <option value="unread">Unread</option>
+                          <option value="read">Read</option>
+                          <option value="in_progress">In Progress</option>
+                          <option value="resolved">Resolved</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
               
-              {/* Pagination - Bottom (Mobile friendly) */}
-              {alerts.length > ITEMS_PER_PAGE && (
-                <div className="px-4 py-2 border-t border-gray-200 flex justify-between items-center bg-gray-50 md:hidden">
-                  <button 
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className={`px-2 py-1 text-xs rounded-md border ${
-                      currentPage === 1 
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                        : 'bg-white text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    Previous
-                  </button>
-                  <span className="text-xs text-gray-500">
-                    Page {currentPage} of {Math.ceil(alerts.length / ITEMS_PER_PAGE)}
-                  </span>
-                  <button 
-                    onClick={() => setCurrentPage(p => Math.min(Math.ceil(alerts.length / ITEMS_PER_PAGE), p + 1))}
-                    disabled={currentPage >= Math.ceil(alerts.length / ITEMS_PER_PAGE)}
-                    className={`px-2 py-1 text-xs rounded-md border ${
-                      currentPage >= Math.ceil(alerts.length / ITEMS_PER_PAGE) 
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                        : 'bg-white text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    Next
-                  </button>
+              {/* Sort buttons */}
+              <button
+                onClick={() => requestSort('createdAt')}
+                type="button"
+                className="flex items-center px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <Clock className="mr-2 h-4 w-4 text-gray-500" />
+                {sortConfig.key === 'createdAt' ? (
+                  sortConfig.direction === 'ascending' ? 'Oldest First' : 'Newest First'
+                ) : 'Sort by Date'}
+                {sortConfig.key === 'createdAt' && (
+                  sortConfig.direction === 'ascending' ? 
+                    <ChevronUp className="ml-1 h-4 w-4 text-gray-500" /> :
+                    <ChevronDown className="ml-1 h-4 w-4 text-gray-500" />
+                )}
+              </button>
+              
+              {/* Active Filters */}
+              <div className="flex flex-wrap gap-2">
+                {filters.type !== 'all' && (
+                  <div className="bg-indigo-50 text-indigo-700 text-xs rounded-full px-3 py-1 flex items-center">
+                    Type: {filters.type.replace('_', ' ')}
+                    <button 
+                      onClick={() => setFilters({...filters, type: 'all'})}
+                      className="ml-1 focus:outline-none"
+                      type="button"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+                
+                {filters.priority !== 'all' && (
+                  <div className="bg-indigo-50 text-indigo-700 text-xs rounded-full px-3 py-1 flex items-center">
+                    Priority: {filters.priority}
+                    <button 
+                      onClick={() => setFilters({...filters, priority: 'all'})}
+                      className="ml-1 focus:outline-none"
+                      type="button"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+                
+                {filters.status !== 'all' && (
+                  <div className="bg-indigo-50 text-indigo-700 text-xs rounded-full px-3 py-1 flex items-center">
+                    Status: {filters.status.replace('_', ' ')}
+                    <button 
+                      onClick={() => setFilters({...filters, status: 'all'})}
+                      className="ml-1 focus:outline-none"
+                      type="button"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              {/* Selection count */}
+              {selectedAlerts.length > 0 && (
+                <div className="ml-auto">
+                  <div className="bg-indigo-50 rounded-lg px-3 py-2 flex items-center">
+                    <span className="text-sm text-indigo-700 mr-3">{selectedAlerts.length} selected</span>
+                    <button 
+                      onClick={() => setSelectedAlerts([])}
+                      className="text-sm text-indigo-600 hover:text-indigo-800"
+                      type="button"
+                    >
+                      Clear
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
           </div>
+        </div>
+
+        {/* Alerts Content */}
+        <div className="flex-1 overflow-hidden">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+              <p className="mt-4 text-gray-600">Loading alerts...</p>
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center h-64">
+              <div className="rounded-full h-12 w-12 bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+              </div>
+              <p className="mt-4 text-gray-600">{error}</p>
+            </div>
+          ) : filteredAlerts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64">
+              <div className="rounded-full h-12 w-12 bg-gray-100 flex items-center justify-center">
+                <Bell className="h-6 w-6 text-gray-400" />
+              </div>
+              <p className="mt-4 text-gray-600">No alerts found</p>
+              <p className="text-sm text-gray-500 mt-1">
+                {searchTerm || filters.type !== 'all' || filters.priority !== 'all' || filters.status !== 'all' 
+                  ? 'Try adjusting your filters or search terms' 
+                  : 'You have no alerts at this time'}
+              </p>
+              {(searchTerm || filters.type !== 'all' || filters.priority !== 'all' || filters.status !== 'all') && (
+                <button 
+                  onClick={() => {
+                    setSearchTerm('');
+                    setFilters({
+                      type: 'all',
+                      priority: 'all',
+                      status: 'all'
+                    });
+                  }}
+                  className="mt-4 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  type="button"
+                >
+                  Clear All Filters
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4 overflow-auto max-h-[calc(100vh-320px)] pr-1">
+              {/* Select all checkbox */}
+              <div className="flex items-center mb-2 pl-4">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  checked={selectedAlerts.length === filteredAlerts.length && filteredAlerts.length > 0}
+                  onChange={handleSelectAll}
+                  id="select-all"
+                />
+                <label htmlFor="select-all" className="ml-2 text-sm text-gray-600">
+                  Select all
+                </label>
+                <span className="ml-auto text-sm text-gray-500">
+                  {filteredAlerts.length} alert{filteredAlerts.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              
+              {filteredAlerts.map(alert => {
+                const priorityColors = getPriorityColors(alert.priority);
+                
+                return (
+                  <div 
+                    key={alert._id} 
+                    className={`border rounded-xl p-4 shadow-sm transition-all duration-200 ${
+                      priorityColors.bg
+                    } ${
+                      priorityColors.border
+                    } ${
+                      alert.status === 'unread' ? 'border-l-4' : ''
+                    }`}
+                  >
+                    <div className="flex items-start">
+                      {/* Checkbox */}
+                      <div className="mr-3 mt-1">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                          checked={selectedAlerts.includes(alert._id)}
+                          onChange={(e) => handleSelectAlert(e, alert._id)}
+                        />
+                      </div>
+                      
+                      {/* Alert icon */}
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center mr-4 ${
+                        alert.priority === 'critical' ? 'bg-red-100' : 
+                        alert.priority === 'warning' ? 'bg-amber-100' : 
+                        'bg-blue-100'
+                      }`}>
+                        {getAlertTypeIcon(alert.type)}
+                      </div>
+                      
+                      {/* Alert content */}
+                      <div className="flex-1">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h3 className={`font-medium ${priorityColors.text}`}>
+                              {alert.title}
+                            </h3>
+                            
+                            {/* Patient info if applicable */}
+                            {alert.patientId && (
+                              <div className="flex items-center mt-1 text-sm text-gray-600">
+                                <User className="h-3.5 w-3.5 mr-1" />
+                                <Link 
+                                  href={`/dashboard/patients/view_patient/${alert.patientId._id}`}
+                                  className="font-medium text-indigo-600 hover:text-indigo-800"
+                                >
+                                  {alert.patientId.firstName} {alert.patientId.lastName}
+                                </Link>
+                                <span className="mx-1">•</span>
+                                <span>{alert.patientId.age} years</span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="flex items-center">
+                            {/* Priority badge */}
+                            <span className={`text-xs font-medium rounded-full px-2.5 py-0.5 ${priorityColors.badge}`}>
+                              {alert.priority}
+                            </span>
+                            
+                            {/* Status indicator */}
+                            {alert.status === 'unread' && (
+                              <div className="ml-2 h-2 w-2 rounded-full bg-blue-600"></div>
+                            )}
+                            
+                            {/* Actions menu */}
+                            <div className="relative ml-2" ref={actionsMenuRef}>
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setOpenActions(openActions === alert._id ? null : alert._id);
+                                }}
+                                type="button"
+                                className="text-gray-400 hover:text-gray-500 focus:outline-none"
+                                aria-label="Alert actions"
+                              >
+                                <MoreHorizontal className="h-5 w-5" />
+                              </button>
+                              
+                              {openActions === alert._id && (
+                                <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
+                                  <div className="py-1">
+                                    {alert.status === 'unread' && (
+                                      <button 
+                                        onClick={() => updateAlertStatus(alert._id, 'read')}
+                                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                        type="button"
+                                      >
+                                        <CheckCircle className="h-4 w-4 mr-3 text-gray-500" />
+                                        Mark as Read
+                                      </button>
+                                    )}
+                                    
+                                    {(alert.status === 'unread' || alert.status === 'read') && (
+                                      <button 
+                                        onClick={() => updateAlertStatus(alert._id, 'in_progress')}
+                                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                        type="button"
+                                      >
+                                        <ArrowUpDown className="h-4 w-4 mr-3 text-gray-500" />
+                                        Mark In Progress
+                                      </button>
+                                    )}
+                                    
+                                    {alert.status !== 'resolved' && (
+                                      <button 
+                                        onClick={() => updateAlertStatus(alert._id, 'resolved')}
+                                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                        type="button"
+                                      >
+                                        <CheckCircle className="h-4 w-4 mr-3 text-green-500" />
+                                        Resolve Alert
+                                      </button>
+                                    )}
+                                    
+                                    {alert.patientId && (
+                                      <Link 
+                                        href={`/dashboard/patients/view_patient/${alert.patientId._id}`}
+                                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <ExternalLink className="h-4 w-4 mr-3 text-gray-500" />
+                                        View Patient
+                                      </Link>
+                                    )}
+                                    
+                                    <button 
+                                      onClick={() => {
+                                        setOpenActions(null);
+                                        // Additional logic to permanently dismiss alert could go here
+                                      }}
+                                      className="flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left"
+                                      type="button"
+                                    >
+                                      <EyeOff className="h-4 w-4 mr-3 text-red-500" />
+                                      Dismiss
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Alert description */}
+                        <p className="mt-1 text-sm text-gray-700">
+                          {alert.description}
+                        </p>
+                        
+                        {/* Alert specific details */}
+                        {alert.vitalSign && (
+                          <div className="mt-2 bg-white bg-opacity-50 rounded-md p-2 text-sm">
+                            <div className="flex items-center text-gray-700">
+                              {alert.vitalSign.type === 'temperature' && (
+                                <Thermometer className="h-4 w-4 mr-1.5 text-red-500" />
+                              )}
+                              {alert.vitalSign.type === 'heart_rate' && (
+                                <Heart className="h-4 w-4 mr-1.5 text-red-500" />
+                              )}
+                              {alert.vitalSign.type === 'oxygen_saturation' && (
+                                <Percent className="h-4 w-4 mr-1.5 text-blue-500" />
+                              )}
+                              <span className="font-medium">
+                                {alert.vitalSign.type.replace('_', ' ')}: 
+                              </span>
+                              <span className="ml-2">
+                                {alert.vitalSign.value} {alert.vitalSign.unit}
+                              </span>
+                              <span className="mx-2 text-gray-400">|</span>
+                              <span className="text-gray-600">
+                                Threshold: {alert.vitalSign.threshold} {alert.vitalSign.unit}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {alert.appointment && (
+                          <div className="mt-2 bg-white bg-opacity-50 rounded-md p-2 text-sm">
+                            <div className="flex items-center text-gray-700">
+                              <Calendar className="h-4 w-4 mr-1.5 text-purple-500" />
+                              <span className="font-medium">
+                                {alert.appointment.type}: 
+                              </span>
+                              <span className="ml-2">
+                                {new Date(alert.appointment.date).toLocaleDateString('en-US', {
+                                  weekday: 'short',
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                              {alert.appointment.location && (
+                                <>
+                                  <span className="mx-2 text-gray-400">|</span>
+                                  <span className="text-gray-600">
+                                    {alert.appointment.location}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Alert footer info */}
+                        <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                          <span>{formatDate(alert.createdAt)}</span>
+                          
+                          <div className="flex items-center">
+                            {alert.status && (
+                              <span className={`capitalize px-2 py-0.5 rounded-full ${
+                                alert.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                                alert.status === 'resolved' ? 'bg-green-100 text-green-800' :
+                                alert.status === 'read' ? 'bg-blue-100 text-blue-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {alert.status.replace('_', ' ')}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </DoctorDashboardLayout>

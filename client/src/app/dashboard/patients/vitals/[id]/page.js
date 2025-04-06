@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
 import DoctorDashboardLayout from '@/components/DoctorDashboardLayout';
-import { ArrowLeft, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Clock, CheckCircle, XCircle, AlertCircle, Thermometer, Heart, Wind, Droplets, Activity } from 'lucide-react';
 
 export default function RecordVitals() {
   const params = useParams();
@@ -21,6 +21,33 @@ export default function RecordVitals() {
     unit: 'C'
   });
   const [message, setMessage] = useState(null);
+
+  // Normal ranges for vital signs
+  const normalRanges = {
+    temperature: { min: 36.1, max: 37.2, unit: 'C' },
+    heartRate: { min: 60, max: 100, unit: 'bpm' },
+    oxygenSaturation: { min: 95, max: 100, unit: '%' },
+    bloodPressure: { min: '90/60', max: '120/80', unit: 'mmHg' },
+    respiratoryRate: { min: 12, max: 20, unit: 'breaths/min' }
+  };
+
+  // Icons for vital sign types
+  const vitalIcons = {
+    temperature: <Thermometer className="h-5 w-5 text-indigo-500" />,
+    heartRate: <Heart className="h-5 w-5 text-red-500" />,
+    oxygenSaturation: <Wind className="h-5 w-5 text-blue-500" />,
+    bloodPressure: <Droplets className="h-5 w-5 text-purple-500" />,
+    respiratoryRate: <Activity className="h-5 w-5 text-green-500" />
+  };
+
+  // Display names for vital sign types
+  const vitalDisplayNames = {
+    temperature: 'Temperature',
+    heartRate: 'Heart Rate',
+    oxygenSaturation: 'Oxygen Saturation',
+    bloodPressure: 'Blood Pressure',
+    respiratoryRate: 'Respiratory Rate'
+  };
 
   useEffect(() => {
     if (!user) {
@@ -60,7 +87,7 @@ export default function RecordVitals() {
 
   const handleTypeChange = (e) => {
     const type = e.target.value;
-    let unit = vitalSign.unit;
+    let unit = '';
     
     // Set appropriate units based on type
     if (type === 'temperature') unit = 'C';
@@ -158,29 +185,6 @@ export default function RecordVitals() {
     );
   }
 
-  // Check if patient exists before accessing its properties
-  if (!patient) {
-    return (
-      <DoctorDashboardLayout>
-        <div className="max-w-7xl mx-auto">
-          <div className="bg-white shadow-lg rounded-lg p-6 mb-6">
-            <div className="text-center">
-              <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">Patient Not Found</h2>
-              <p className="text-gray-600 mb-4">The patient you&apos;re looking for doesn&apos;t exist or has been removed.</p>
-              <button
-                onClick={() => router.push('/dashboard/patients/manage_patients')}
-                className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                Go to Patient Management
-              </button>
-            </div>
-          </div>
-        </div>
-      </DoctorDashboardLayout>
-    );
-  }
-
   return (
     <DoctorDashboardLayout>
       <div className="max-w-7xl mx-auto">
@@ -197,88 +201,142 @@ export default function RecordVitals() {
           </div>
         </div>
 
+        {/* Patient info card */}
         <div className="bg-white shadow-lg rounded-lg p-6 mb-6">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">
-              {patient.firstName} {patient.lastName}
-            </h2>
-            <p className="text-gray-600">Age: {patient.age} years</p>
-            {patient.chronicDisease && (
-              <p className="text-gray-600">Chronic Condition: {patient.chronicDisease}</p>
-            )}
-            <p className="mt-2">
-              <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
-                ${patient.status === 'Critical' ? 'bg-red-100 text-red-800' : 
-                  patient.status === 'Moderate' ? 'bg-yellow-100 text-yellow-800' : 
-                  'bg-green-100 text-green-800'}`}>
-                {patient.status || 'Stable'}
-              </span>
-            </p>
-          </div>
-
-          {message && (
-            <div className={`mb-6 p-4 rounded-lg ${
-              message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-            }`}>
-              {message.text}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="flex justify-between items-start">
             <div>
-              <label htmlFor="vitalType" className="block text-sm font-medium text-gray-700">
-                Vital Sign Type
-              </label>
-              <select
-                id="vitalType"
-                name="type"
-                value={vitalSign.type}
-                onChange={handleTypeChange}
-                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-              >
-                <option value="temperature">Temperature</option>
-                <option value="heartRate">Heart Rate</option>
-                <option value="oxygenSaturation">Oxygen Saturation</option>
-                <option value="bloodPressure">Blood Pressure</option>
-                <option value="respiratoryRate">Respiratory Rate</option>
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="value" className="block text-sm font-medium text-gray-700">
-                Value
-              </label>
-              <div className="mt-1 flex rounded-md shadow-sm">
-                <input
-                  type="number"
-                  name="value"
-                  id="value"
-                  step="0.1"
-                  value={vitalSign.value}
-                  onChange={(e) => setVitalSign({...vitalSign, value: e.target.value})}
-                  required
-                  className="focus:ring-indigo-500 focus:border-indigo-500 flex-1 block w-full rounded-none rounded-l-md sm:text-sm border-gray-300"
-                />
-                <span className="inline-flex items-center px-3 rounded-r-md border border-l-0 border-gray-300 bg-gray-50 text-gray-500 sm:text-sm">
-                  {vitalSign.unit}
-                </span>
+              <h2 className="text-2xl font-bold text-gray-800">
+                {patient?.firstName} {patient?.lastName}
+              </h2>
+              <div className="mt-2 space-y-1">
+                <p className="text-gray-600">Age: {patient?.age} years</p>
+                <p className="text-gray-600">Gender: {patient?.gender || 'Not specified'}</p>
+                {patient?.chronicDisease && (
+                  <p className="text-gray-600">Chronic Condition: {patient.chronicDisease}</p>
+                )}
               </div>
             </div>
-
             <div>
-              <button
-                type="submit"
-                className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                Record Vital Sign
-              </button>
+              <span className={`px-3 py-1.5 inline-flex text-sm font-medium rounded-full 
+                ${patient?.status === 'Critical' ? 'bg-red-100 text-red-800' : 
+                  patient?.status === 'Moderate' ? 'bg-yellow-100 text-yellow-800' : 
+                  'bg-green-100 text-green-800'}`}>
+                {patient?.status || 'Stable'}
+              </span>
             </div>
-          </form>
+          </div>
         </div>
 
-        {/* Recent Vital Signs */}
+        {message && (
+          <div className={`mb-6 p-4 rounded-lg flex items-center ${
+            message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+          }`}>
+            {message.type === 'success' ? 
+              <CheckCircle className="h-5 w-5 mr-2" /> : 
+              <AlertCircle className="h-5 w-5 mr-2" />}
+            {message.text}
+          </div>
+        )}
+
+        <div className="grid md:grid-cols-2 gap-6 mb-6">
+          {/* Recording form */}
+          <div className="bg-white shadow-lg rounded-lg p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Record New Vital Sign</h3>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label htmlFor="vitalType" className="block text-sm font-medium text-gray-700 mb-1">
+                  Vital Sign Type
+                </label>
+                <select
+                  id="vitalType"
+                  name="type"
+                  value={vitalSign.type}
+                  onChange={handleTypeChange}
+                  className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                >
+                  {Object.keys(vitalDisplayNames).map(type => (
+                    <option key={type} value={type}>{vitalDisplayNames[type]}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="value" className="block text-sm font-medium text-gray-700 mb-1">
+                  Value
+                </label>
+                <div className="flex rounded-md shadow-sm">
+                  <input
+                    type="number"
+                    name="value"
+                    id="value"
+                    step="0.1"
+                    value={vitalSign.value}
+                    onChange={(e) => setVitalSign({...vitalSign, value: e.target.value})}
+                    required
+                    className="focus:ring-indigo-500 focus:border-indigo-500 flex-1 block w-full rounded-none rounded-l-md sm:text-sm border-gray-300 h-10"
+                    placeholder={`${normalRanges[vitalSign.type]?.min} - ${normalRanges[vitalSign.type]?.max}`}
+                  />
+                  <span className="inline-flex items-center px-3 rounded-r-md border border-l-0 border-gray-300 bg-gray-50 text-gray-500 sm:text-sm h-10">
+                    {vitalSign.unit}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-gray-500">
+                  Normal range: {normalRanges[vitalSign.type]?.min} - {normalRanges[vitalSign.type]?.max} {normalRanges[vitalSign.type]?.unit}
+                </p>
+              </div>
+
+              <div>
+                <button
+                  type="submit"
+                  className="w-full flex justify-center items-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <CheckCircle className="h-4 w-4 mr-1" />
+                  Record Vital Sign
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Latest readings summary */}
+          <div className="bg-white shadow-lg rounded-lg p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Latest Readings Summary</h3>
+            <div className="grid grid-cols-1 gap-4">
+              {Object.keys(vitalDisplayNames).map(type => {
+                const latestVital = patient?.vitalSigns?.filter(v => v.type === type)[0];
+                return (
+                  <div key={type} className="flex items-center p-3 border rounded-lg bg-gray-50">
+                    <div className="mr-3">
+                      {vitalIcons[type]}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-gray-700">{vitalDisplayNames[type]}</h4>
+                      {latestVital ? (
+                        <div className="flex items-center mt-1">
+                          <p className={`text-base font-semibold ${latestVital.isAlert ? 'text-red-600' : 'text-gray-900'}`}>
+                            {latestVital.value} {latestVital.unit}
+                          </p>
+                          {latestVital.isAlert ? 
+                            <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-800">Alert</span> :
+                            <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-800">Normal</span>
+                          }
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 mt-1">No data recorded</p>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {latestVital && new Date(latestVital.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Vital Signs History */}
         <div className="bg-white shadow-lg rounded-lg p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Vital Signs</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Vital Signs History</h3>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -290,7 +348,7 @@ export default function RecordVitals() {
                     Value
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Recorded At
+                    Date & Time
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
@@ -298,26 +356,33 @@ export default function RecordVitals() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {patient.vitalSigns && patient.vitalSigns.length > 0 ? (
+                {patient?.vitalSigns && patient.vitalSigns.length > 0 ? (
                   patient.vitalSigns.slice(0, 10).map((vital, index) => (
-                    <tr key={index}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {vital.type.charAt(0).toUpperCase() + vital.type.slice(1)}
+                    <tr key={index} className={vital.isAlert ? "bg-red-50" : ""}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="mr-2">
+                            {vitalIcons[vital.type]}
+                          </div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {vitalDisplayNames[vital.type]}
+                          </div>
+                        </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
                         {vital.value} {vital.unit}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(vital.timestamp).toLocaleString()}
+                        {new Date(vital.timestamp).toLocaleDateString()} at {new Date(vital.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {vital.isAlert ? (
-                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
-                            Alert
+                          <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                            <AlertCircle className="h-3 w-3 mr-1" /> Alert
                           </span>
                         ) : (
-                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                            Normal
+                          <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                            <CheckCircle className="h-3 w-3 mr-1" /> Normal
                           </span>
                         )}
                       </td>
