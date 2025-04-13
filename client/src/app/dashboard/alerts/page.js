@@ -74,267 +74,23 @@ export default function AlertsPage() {
     }
   }, [user, router]);
 
-  // Sample data to simulate alerts
+  // Fetch alerts from API
   useEffect(() => {
     const fetchAlerts = async () => {
-      // In a real app, this would be an API call to fetch alerts
       try {
         setIsLoading(true);
-        
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        // Sample data - in a real app, this would come from your API
-        const mockAlerts = [
-          {
-            _id: '1',
-            type: 'vital_sign',
-            patientId: {
-              _id: 'p1',
-              firstName: 'John',
-              lastName: 'Doe',
-              age: 67
-            },
-            title: 'High Blood Pressure',
-            description: 'Patient\'s blood pressure is 160/95 mmHg, significantly above normal range.',
-            priority: 'critical',
-            status: 'unread',
-            vitalSign: {
-              type: 'blood_pressure',
-              value: '160/95',
-              unit: 'mmHg',
-              threshold: '140/90'
-            },
-            createdAt: new Date('2023-06-10T10:23:00'),
-            updatedAt: new Date('2023-06-10T10:23:00')
+        const config = {
+          headers: {
+            Authorization: `Bearer ${user.token}`,
           },
-          {
-            _id: '2',
-            type: 'vital_sign',
-            patientId: {
-              _id: 'p2',
-              firstName: 'Jane',
-              lastName: 'Smith',
-              age: 45
-            },
-            title: 'Low Oxygen Saturation',
-            description: 'Oxygen saturation dropped to 91%, below the normal threshold.',
-            priority: 'critical',
-            status: 'unread',
-            vitalSign: {
-              type: 'oxygen_saturation',
-              value: '91',
-              unit: '%',
-              threshold: '95'
-            },
-            createdAt: new Date('2023-06-09T14:45:00'),
-            updatedAt: new Date('2023-06-09T14:45:00')
-          },
-          {
-            _id: '3',
-            type: 'medication',
-            patientId: {
-              _id: 'p3',
-              firstName: 'Robert',
-              lastName: 'Johnson',
-              age: 58
-            },
-            title: 'Medication Refill Required',
-            description: 'Patient\'s hypertension medication needs to be refilled within 3 days.',
-            priority: 'warning',
-            status: 'unread',
-            medication: {
-              name: 'Lisinopril',
-              dosage: '10mg',
-              refillDate: new Date('2023-06-13')
-            },
-            createdAt: new Date('2023-06-08T09:15:00'),
-            updatedAt: new Date('2023-06-08T09:15:00')
-          },
-          {
-            _id: '4',
-            type: 'appointment',
-            patientId: {
-              _id: 'p4',
-              firstName: 'Sarah',
-              lastName: 'Williams',
-              age: 35
-            },
-            title: 'Upcoming Follow-up Appointment',
-            description: 'Scheduled follow-up for post-surgery recovery assessment.',
-            priority: 'info',
-            status: 'read',
-            appointment: {
-              date: new Date('2023-06-15T11:00:00'),
-              type: 'follow-up',
-              location: 'Main Clinic'
-            },
-            createdAt: new Date('2023-06-07T16:30:00'),
-            updatedAt: new Date('2023-06-07T16:30:00')
-          },
-          {
-            _id: '5',
-            type: 'vital_sign',
-            patientId: {
-              _id: 'p5',
-              firstName: 'Michael',
-              lastName: 'Brown',
-              age: 72
-            },
-            title: 'Elevated Heart Rate',
-            description: 'Heart rate consistently above 100 BPM at rest over the last 24 hours.',
-            priority: 'warning',
-            status: 'in_progress',
-            vitalSign: {
-              type: 'heart_rate',
-              value: '110',
-              unit: 'BPM',
-              threshold: '100'
-            },
-            createdAt: new Date('2023-06-06T08:20:00'),
-            updatedAt: new Date('2023-06-06T13:45:00')
-          },
-          {
-            _id: '6',
-            type: 'lab_result',
-            patientId: {
-              _id: 'p6',
-              firstName: 'Emily',
-              lastName: 'Davis',
-              age: 41
-            },
-            title: 'Abnormal Blood Test Results',
-            description: 'Liver function tests show elevated ALT and AST levels.',
-            priority: 'warning',
-            status: 'resolved',
-            labResult: {
-              test: 'Liver Function',
-              abnormal: ['ALT', 'AST'],
-              resultDate: new Date('2023-06-05')
-            },
-            createdAt: new Date('2023-06-05T09:30:00'),
-            updatedAt: new Date('2023-06-05T15:20:00')
-          },
-          {
-            _id: '7',
-            type: 'message',
-            patientId: {
-              _id: 'p7',
-              firstName: 'David',
-              lastName: 'Wilson',
-              age: 53
-            },
-            title: 'Patient Message - Medication Side Effects',
-            description: 'Patient reporting dizziness and nausea after starting new medication.',
-            priority: 'warning',
-            status: 'in_progress',
-            message: {
-              content: 'I\'ve been feeling dizzy and nauseated since starting the new medication you prescribed. Should I continue taking it?',
-              date: new Date('2023-06-04T11:15:00')
-            },
-            createdAt: new Date('2023-06-04T11:15:00'),
-            updatedAt: new Date('2023-06-04T14:20:00')
-          },
-          {
-            _id: '8',
-            type: 'vital_sign',
-            patientId: {
-              _id: 'p8',
-              firstName: 'Linda',
-              lastName: 'Taylor',
-              age: 65
-            },
-            title: 'High Temperature',
-            description: 'Patient temperature measured at 39.2°C, indicating fever.',
-            priority: 'critical',
-            status: 'resolved',
-            vitalSign: {
-              type: 'temperature',
-              value: '39.2',
-              unit: '°C',
-              threshold: '38.0'
-            },
-            createdAt: new Date('2023-06-03T17:40:00'),
-            updatedAt: new Date('2023-06-03T19:15:00')
-          },
-          {
-            _id: '9',
-            type: 'system',
-            title: 'System Maintenance',
-            description: 'Scheduled system maintenance on June 12th from 2AM to 4AM. Some features may be unavailable during this time.',
-            priority: 'info',
-            status: 'read',
-            createdAt: new Date('2023-06-02T10:00:00'),
-            updatedAt: new Date('2023-06-02T10:00:00')
-          },
-          {
-            _id: '10',
-            type: 'medication',
-            patientId: {
-              _id: 'p10',
-              firstName: 'Thomas',
-              lastName: 'Anderson',
-              age: 48
-            },
-            title: 'Medication Interaction Warning',
-            description: 'Potential interaction between newly prescribed antibiotic and existing medication.',
-            priority: 'warning',
-            status: 'unread',
-            medication: {
-              name: 'Ciprofloxacin',
-              interactsWith: 'Warfarin'
-            },
-            createdAt: new Date('2023-06-01T13:20:00'),
-            updatedAt: new Date('2023-06-01T13:20:00')
-          },
-          {
-            _id: '11',
-            type: 'lab_result',
-            patientId: {
-              _id: 'p11',
-              firstName: 'Patricia',
-              lastName: 'Moore',
-              age: 62
-            },
-            title: 'Lab Results Available',
-            description: 'Annual check-up lab results are now available for review.',
-            priority: 'info',
-            status: 'read',
-            labResult: {
-              test: 'Comprehensive Panel',
-              resultDate: new Date('2023-05-31')
-            },
-            createdAt: new Date('2023-05-31T14:45:00'),
-            updatedAt: new Date('2023-05-31T14:45:00')
-          },
-          {
-            _id: '12',
-            type: 'appointment',
-            patientId: {
-              _id: 'p12',
-              firstName: 'Jennifer',
-              lastName: 'Lee',
-              age: 39
-            },
-            title: 'Appointment Cancellation',
-            description: 'Patient canceled their appointment scheduled for June 5th.',
-            priority: 'info',
-            status: 'read',
-            appointment: {
-              date: new Date('2023-06-05T10:30:00'),
-              type: 'check-up',
-              action: 'cancelled'
-            },
-            createdAt: new Date('2023-05-30T09:10:00'),
-            updatedAt: new Date('2023-05-30T09:10:00')
-          }
-        ];
-        
-        setAlerts(mockAlerts);
-        setFilteredAlerts(mockAlerts);
-        
+        };
+        const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/alerts`, config);
+        const realAlerts = response.data;
+        setAlerts(realAlerts);
+        setFilteredAlerts(realAlerts);
+
         // Calculate stats
-        const calculatedStats = mockAlerts.reduce((stats, alert) => {
+        const calculatedStats = realAlerts.reduce((stats, alert) => {
           if (alert.status === 'resolved') {
             stats.resolved++;
           } else if (alert.priority === 'critical') {
@@ -346,9 +102,8 @@ export default function AlertsPage() {
           }
           return stats;
         }, { critical: 0, warning: 0, info: 0, resolved: 0 });
-        
+
         setStats(calculatedStats);
-        
       } catch (err) {
         console.error('Error fetching alerts:', err);
         setError('Failed to load alerts. Please try again.');

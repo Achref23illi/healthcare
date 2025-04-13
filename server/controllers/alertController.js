@@ -19,7 +19,7 @@ exports.getAlerts = async (req, res) => {
     // Execute query
     const alerts = await Alert.find(query)
       .sort({ createdAt: -1 })
-      .populate('patient', 'firstName lastName');
+      .populate('patient', 'firstName lastName age');
     
     res.json(alerts);
   } catch (error) {

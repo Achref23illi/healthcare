@@ -24,6 +24,7 @@ export default function RegisterPage() {
     email: '',
     password: '',
     confirmPassword: '',
+    specialization: '',
   });
   const [isLoading, setIsLoading] = useState(false);
   const [registerError, setRegisterError] = useState('');
@@ -33,6 +34,7 @@ export default function RegisterPage() {
     email: false,
     password: false,
     confirmPassword: false,
+    specialization: false,
   });
   const { register, error } = useAuth();
   const router = useRouter();
@@ -85,7 +87,8 @@ export default function RegisterPage() {
         name: formData.name,
         email: formData.email,
         password: formData.password,
-        role: 'doctor'
+        role: 'doctor',
+        specialization: formData.specialization,
       };
 
       await register(payload);
@@ -111,7 +114,8 @@ export default function RegisterPage() {
   const isFormValid = () => {
     return formData.name && formData.email && 
       formData.password && isPasswordValid() && 
-      formData.confirmPassword && isPasswordMatching();
+      formData.confirmPassword && isPasswordMatching() &&
+      formData.specialization;
   };
 
   // Get validation state for form fields
@@ -142,6 +146,11 @@ export default function RegisterPage() {
           isValid: isPasswordMatching(), 
           message: !formData.confirmPassword ? 'Confirm your password' : 
             !isPasswordMatching() ? 'Passwords do not match' : '' 
+        };
+      case 'specialization':
+        return { 
+          isValid: !!formData.specialization, 
+          message: !formData.specialization ? 'Specialization is required' : '' 
         };
       default:
         return { isValid: true, message: '' };
@@ -369,6 +378,44 @@ export default function RegisterPage() {
                       </div>
                       {formTouched.confirmPassword && !getValidationState('confirmPassword').isValid && (
                         <p className="mt-1 text-xs text-red-600">{getValidationState('confirmPassword').message}</p>
+                      )}
+                    </div>
+
+                    {/* Specialization Dropdown */}
+                    <div className="relative">
+                      <label htmlFor="specialization" className="block text-sm font-medium text-gray-700 mb-1">
+                        Specialization
+                      </label>
+                      <div className="relative">
+                        <select
+                          id="specialization"
+                          name="specialization"
+                          required
+                          className={`appearance-none block w-full pl-3 pr-10 py-2 border ${
+                            formTouched.specialization ? (getValidationState('specialization').isValid ? 'border-green-300' : 'border-red-300') : 'border-gray-300'
+                          } rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-colors duration-200`}
+                          value={formData.specialization}
+                          onChange={handleChange}
+                          onBlur={handleBlur}
+                        >
+                          <option value="" disabled>Select your specialization</option>
+                          <option value="Cardiologist">Cardiologist</option>
+                          <option value="Dermatologist">Dermatologist</option>
+                          <option value="Neurologist">Neurologist</option>
+                          <option value="Pediatrician">Pediatrician</option>
+                          <option value="Psychiatrist">Psychiatrist</option>
+                          <option value="Radiologist">Radiologist</option>
+                          <option value="Surgeon">Surgeon</option>
+                          <option value="General Practitioner">General Practitioner</option>
+                        </select>
+                        {formTouched.specialization && getValidationState('specialization').isValid && (
+                          <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          </div>
+                        )}
+                      </div>
+                      {formTouched.specialization && !getValidationState('specialization').isValid && (
+                        <p className="mt-1 text-xs text-red-600">{getValidationState('specialization').message}</p>
                       )}
                     </div>
                   </div>

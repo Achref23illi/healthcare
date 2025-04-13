@@ -23,6 +23,11 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
+    // Ensure specialization is provided for doctors
+    if (role === 'doctor' && !specialization) {
+      return res.status(400).json({ message: 'Specialization is required for doctors' });
+    }
+
     // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
