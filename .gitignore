@@ -47,3 +47,6 @@ jspm_packages/
 # Exclude .git directories in subdirectories
 client/.git/
 server/.git/
+
+# MacOS specific files
+.DS_Store
