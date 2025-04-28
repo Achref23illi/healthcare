@@ -38,6 +38,16 @@ mongoose.connect(process.env.MONGO_URI, {})
   process.exit(1);
 });
 
+// You can add this to your server.js temporarily to check if alerts exist
+app.get('/api/debug/alerts', async (req, res) => {
+  try {
+    const Alert = require('./models/Alert');
+    const alerts = await Alert.find({});
+    res.json({ count: alerts.length, alerts });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));

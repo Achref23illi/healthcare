@@ -76,46 +76,55 @@ export default function AlertsPage() {
 
   // Fetch alerts from API
   useEffect(() => {
-    const fetchAlerts = async () => {
-      try {
-        setIsLoading(true);
-        const config = {
-          headers: {
-            Authorization: `Bearer ${user.token}`,
-          },
-        };
-        const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/alerts`, config);
-        const realAlerts = response.data;
-        setAlerts(realAlerts);
-        setFilteredAlerts(realAlerts);
-
-        // Calculate stats
-        const calculatedStats = realAlerts.reduce((stats, alert) => {
-          if (alert.status === 'resolved') {
-            stats.resolved++;
-          } else if (alert.priority === 'critical') {
-            stats.critical++;
-          } else if (alert.priority === 'warning') {
-            stats.warning++;
-          } else if (alert.priority === 'info') {
-            stats.info++;
-          }
-          return stats;
-        }, { critical: 0, warning: 0, info: 0, resolved: 0 });
-
-        setStats(calculatedStats);
-      } catch (err) {
-        console.error('Error fetching alerts:', err);
-        setError('Failed to load alerts. Please try again.');
-      } finally {
-        setIsLoading(false);
-      }
+    if (!user?.token) return;
+    
+    // Add a fetchAlerts function at the top level of the component
+const fetchAlerts = async () => {
+  try {
+    setIsLoading(true);
+    
+    const config = {
+      headers: {
+        Authorization: `Bearer ${user.token}`,
+      },
     };
     
-    if (user) {
-      fetchAlerts();
-    }
-  }, [user]);
+    console.log('Re-fetching alerts...');
+    const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/alerts`, config);
+    console.log('Alerts response:', response.data);
+    
+    const realAlerts = response.data;
+    setAlerts(realAlerts);
+    setFilteredAlerts(realAlerts);
+
+    // Recalculate stats
+    const calculatedStats = realAlerts.reduce((stats, alert) => {
+      const status = alert.status.toLowerCase();
+      const priority = alert.priority.toLowerCase();
+      
+      if (status === 'resolved') {
+        stats.resolved++;
+      } else if (priority === 'critical') {
+        stats.critical++;
+      } else if (priority === 'high' || priority === 'medium') {
+        stats.warning++;
+      } else {
+        stats.info++;
+      }
+      return stats;
+    }, { critical: 0, warning: 0, info: 0, resolved: 0 });
+
+    setStats(calculatedStats);
+  } catch (err) {
+    console.error('Error fetching alerts:', err);
+    setError('Failed to load alerts. Please try again.');
+  } finally {
+    setIsLoading(false);
+  }
+};
+    
+    fetchAlerts();
+  }, [user, logout]);
 
   // Filter and sort alerts
   useEffect(() => {
@@ -129,7 +138,7 @@ export default function AlertsPage() {
       result = result.filter(alert => 
         (alert.title && alert.title.toLowerCase().includes(searchLower)) ||
         (alert.description && alert.description.toLowerCase().includes(searchLower)) ||
-        (alert.patientId && 
+        (alert.patientId && typeof alert.patientId === 'object' && 
           (`${alert.patientId.firstName} ${alert.patientId.lastName}`).toLowerCase().includes(searchLower))
       );
     }
@@ -140,11 +149,11 @@ export default function AlertsPage() {
     }
     
     if (filters.priority !== 'all') {
-      result = result.filter(alert => alert.priority === filters.priority);
+      result = result.filter(alert => alert.priority.toLowerCase() === filters.priority);
     }
     
     if (filters.status !== 'all') {
-      result = result.filter(alert => alert.status === filters.status);
+      result = result.filter(alert => normalizeStatus(alert.status) === filters.status);
     }
     
     // Sort results
@@ -175,6 +184,21 @@ export default function AlertsPage() {
     setFilteredAlerts(result);
   }, [searchTerm, filters, sortConfig, alerts]);
 
+  // Normalize status values
+  // Update the normalizeStatus function
+const normalizeStatus = (status) => {
+  if (!status) return 'unread';
+  
+  // Convert various status formats to consistent values
+  const statusLower = status.toLowerCase();
+  
+  if (statusLower === 'new') return 'unread';
+  if (statusLower === 'acknowledged') return 'in_progress';
+  if (statusLower === 'resolved') return 'resolved';
+  
+  return statusLower;
+};
+
   // Sorting function
   const requestSort = (key) => {
     let direction = 'ascending';
@@ -185,27 +209,83 @@ export default function AlertsPage() {
   };
 
   // Mark alert as read or in progress
-  const updateAlertStatus = (alertId, newStatus) => {
-    // This would be an API call in a real app
+ // Modify the updateAlertStatus function
+const updateAlertStatus = async (alertId, newStatus) => {
+  try {
+    // API mapping - convert UI status to API status
+    const apiStatus = newStatus === 'read' ? 'Acknowledged' : 
+                      newStatus === 'in_progress' ? 'Acknowledged' : 'Resolved';
+    
+    console.log('Updating alert', alertId, 'to status:', apiStatus);
+    
+    const config = {
+      headers: {
+        Authorization: `Bearer ${user.token}`
+      }
+    };
+    
+    const response = await axios.put(
+      `${process.env.NEXT_PUBLIC_API_URL}/alerts/${alertId}`,
+      { status: apiStatus },
+      config
+    );
+    
+    console.log('API response:', response.data);
+    
+    // Update UI
     setAlerts(alerts.map(alert => 
       alert._id === alertId 
-        ? { ...alert, status: newStatus, updatedAt: new Date() } 
+        ? { ...alert, status: apiStatus, updatedAt: new Date() } 
         : alert
     ));
+    
+    console.log('Alerts after update:', alerts);
+    
+    // Force a re-fetch of alerts to ensure state is in sync with backend
+    fetchAlerts();
+    
     setOpenActions(null);
-  };
+  } catch (error) {
+    console.error('Error updating alert status:', error.response?.data || error);
+  }
+};
 
   // Mark multiple alerts as read
-  const markSelectedAsRead = () => {
+  const markSelectedAsRead = async () => {
     if (!selectedAlerts.length) return;
     
-    setAlerts(alerts.map(alert => 
-      selectedAlerts.includes(alert._id) && alert.status === 'unread'
-        ? { ...alert, status: 'read', updatedAt: new Date() } 
-        : alert
-    ));
-    
-    setSelectedAlerts([]);
+    try {
+      const config = {
+        headers: {
+          Authorization: `Bearer ${user.token}`
+        }
+      };
+      
+      // Update alerts one by one
+      for (const alertId of selectedAlerts) {
+        const alert = alerts.find(a => a._id === alertId);
+        
+        if (alert && normalizeStatus(alert.status) === 'unread') {
+          await axios.put(
+            `${process.env.NEXT_PUBLIC_API_URL}/alerts/${alertId}`,
+            { status: 'Acknowledged' },
+            config
+          );
+        }
+      }
+      
+      // Update local state
+      setAlerts(alerts.map(alert => 
+        selectedAlerts.includes(alert._id) && normalizeStatus(alert.status) === 'unread'
+          ? { ...alert, status: 'Acknowledged', updatedAt: new Date() } 
+          : alert
+      ));
+      
+      // Clear selection
+      setSelectedAlerts([]);
+    } catch (error) {
+      console.error('Error marking alerts as read:', error);
+    }
   };
 
   // Format date for display
@@ -256,7 +336,7 @@ export default function AlertsPage() {
 
   // Close all dropdown menus when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event) => {
+    function handleClickOutside(event) {
       if (filterMenuRef.current && !filterMenuRef.current.contains(event.target)) {
         setFilterMenuOpen(false);
       }
@@ -264,7 +344,7 @@ export default function AlertsPage() {
       if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target)) {
         setOpenActions(null);
       }
-    };
+    }
     
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
@@ -274,7 +354,9 @@ export default function AlertsPage() {
 
   // Get icon based on alert type
   const getAlertTypeIcon = (type) => {
-    switch (type) {
+    const alertType = type || 'vital_sign'; // Default if type is missing
+    
+    switch (alertType) {
       case 'vital_sign':
         return <Heart className="h-5 w-5 text-red-500" />;
       case 'medication':
@@ -285,7 +367,7 @@ export default function AlertsPage() {
         return <Calendar className="h-5 w-5 text-purple-500" />;
       case 'message':
         return <MessageSquare className="h-5 w-5 text-green-500" />;
-      case 'system':
+      case 'custom':
         return <Info className="h-5 w-5 text-gray-500" />;
       default:
         return <Bell className="h-5 w-5 text-gray-500" />;
@@ -294,7 +376,9 @@ export default function AlertsPage() {
 
   // Get color scheme based on priority
   const getPriorityColors = (priority) => {
-    switch (priority) {
+    const priorityLower = priority?.toLowerCase() || 'info';
+    
+    switch (priorityLower) {
       case 'critical':
         return {
           bg: 'bg-red-50',
@@ -303,6 +387,7 @@ export default function AlertsPage() {
           icon: 'text-red-500',
           badge: 'bg-red-100 text-red-800'
         };
+      case 'high':
       case 'warning':
         return {
           bg: 'bg-amber-50',
@@ -311,21 +396,23 @@ export default function AlertsPage() {
           icon: 'text-amber-500',
           badge: 'bg-amber-100 text-amber-800'
         };
+      case 'medium':
+        return {
+          bg: 'bg-yellow-50',
+          text: 'text-yellow-700',
+          border: 'border-yellow-200',
+          icon: 'text-yellow-500',
+          badge: 'bg-yellow-100 text-yellow-800'
+        };
+      case 'low':
       case 'info':
+      default:
         return {
           bg: 'bg-blue-50',
           text: 'text-blue-700',
           border: 'border-blue-200',
           icon: 'text-blue-500',
           badge: 'bg-blue-100 text-blue-800'
-        };
-      default:
-        return {
-          bg: 'bg-gray-50',
-          text: 'text-gray-700',
-          border: 'border-gray-200',
-          icon: 'text-gray-500',
-          badge: 'bg-gray-100 text-gray-800'
         };
     }
   };
@@ -358,7 +445,9 @@ export default function AlertsPage() {
               <button
                 onClick={() => {
                   setIsLoading(true);
-                  setTimeout(() => setIsLoading(false), 500);
+                  setTimeout(() => {
+                    window.location.reload();
+                  }, 500);
                 }}
                 className="inline-flex items-center px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors duration-200 shadow-sm"
               >
@@ -498,7 +587,7 @@ export default function AlertsPage() {
                           <option value="lab_result">Lab Results</option>
                           <option value="appointment">Appointments</option>
                           <option value="message">Messages</option>
-                          <option value="system">System</option>
+                          <option value="custom">Custom</option>
                         </select>
                       </div>
                       
@@ -512,8 +601,9 @@ export default function AlertsPage() {
                         >
                           <option value="all">All Priorities</option>
                           <option value="critical">Critical</option>
-                          <option value="warning">Warning</option>
-                          <option value="info">Information</option>
+                          <option value="high">High</option>
+                          <option value="medium">Medium</option>
+                          <option value="low">Low</option>
                         </select>
                       </div>
                       
@@ -527,7 +617,6 @@ export default function AlertsPage() {
                         >
                           <option value="all">All Statuses</option>
                           <option value="unread">Unread</option>
-                          <option value="read">Read</option>
                           <option value="in_progress">In Progress</option>
                           <option value="resolved">Resolved</option>
                         </select>
@@ -678,6 +767,7 @@ export default function AlertsPage() {
               
               {filteredAlerts.map(alert => {
                 const priorityColors = getPriorityColors(alert.priority);
+                const alertStatus = normalizeStatus(alert.status);
                 
                 return (
                   <div 
@@ -687,7 +777,7 @@ export default function AlertsPage() {
                     } ${
                       priorityColors.border
                     } ${
-                      alert.status === 'unread' ? 'border-l-4' : ''
+                      alertStatus === 'unread' ? 'border-l-4' : ''
                     }`}
                   >
                     <div className="flex items-start">
@@ -704,7 +794,7 @@ export default function AlertsPage() {
                       {/* Alert icon */}
                       <div className={`h-10 w-10 rounded-full flex items-center justify-center mr-4 ${
                         alert.priority === 'critical' ? 'bg-red-100' : 
-                        alert.priority === 'warning' ? 'bg-amber-100' : 
+                        alert.priority === 'high' ? 'bg-amber-100' : 
                         'bg-blue-100'
                       }`}>
                         {getAlertTypeIcon(alert.type)}
@@ -715,7 +805,7 @@ export default function AlertsPage() {
                         <div className="flex justify-between items-start">
                           <div>
                             <h3 className={`font-medium ${priorityColors.text}`}>
-                              {alert.title}
+                              {alert.title || `${alert.type.replace('_', ' ')} Alert`}
                             </h3>
                             
                             {/* Patient info if applicable */}
@@ -723,13 +813,19 @@ export default function AlertsPage() {
                               <div className="flex items-center mt-1 text-sm text-gray-600">
                                 <User className="h-3.5 w-3.5 mr-1" />
                                 <Link 
-                                  href={`/dashboard/patients/view_patient/${alert.patientId._id}`}
+                                  href={`/dashboard/patients/vitals/${typeof alert.patientId === 'object' ? alert.patientId._id : alert.patientId}`}
                                   className="font-medium text-indigo-600 hover:text-indigo-800"
                                 >
-                                  {alert.patientId.firstName} {alert.patientId.lastName}
+                                  {typeof alert.patientId === 'object' ? 
+                                    `${alert.patientId.firstName || ''} ${alert.patientId.lastName || ''}` : 
+                                    'View Patient'}
                                 </Link>
-                                <span className="mx-1">•</span>
-                                <span>{alert.patientId.age} years</span>
+                                {typeof alert.patientId === 'object' && alert.patientId.age && (
+                                  <>
+                                    <span className="mx-1">•</span>
+                                    <span>{alert.patientId.age} years</span>
+                                  </>
+                                )}
                               </div>
                             )}
                           </div>
@@ -741,7 +837,7 @@ export default function AlertsPage() {
                             </span>
                             
                             {/* Status indicator */}
-                            {alert.status === 'unread' && (
+                            {alertStatus === 'unread' && (
                               <div className="ml-2 h-2 w-2 rounded-full bg-blue-600"></div>
                             )}
                             
@@ -763,7 +859,7 @@ export default function AlertsPage() {
                               {openActions === alert._id && (
                                 <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
                                   <div className="py-1">
-                                    {alert.status === 'unread' && (
+                                    {alertStatus === 'unread' && (
                                       <button 
                                         onClick={() => updateAlertStatus(alert._id, 'read')}
                                         className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
@@ -774,7 +870,7 @@ export default function AlertsPage() {
                                       </button>
                                     )}
                                     
-                                    {(alert.status === 'unread' || alert.status === 'read') && (
+                                    {(alertStatus === 'unread' || alertStatus === 'read') && (
                                       <button 
                                         onClick={() => updateAlertStatus(alert._id, 'in_progress')}
                                         className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
@@ -785,7 +881,7 @@ export default function AlertsPage() {
                                       </button>
                                     )}
                                     
-                                    {alert.status !== 'resolved' && (
+                                    {alertStatus !== 'resolved' && (
                                       <button 
                                         onClick={() => updateAlertStatus(alert._id, 'resolved')}
                                         className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
@@ -798,7 +894,7 @@ export default function AlertsPage() {
                                     
                                     {alert.patientId && (
                                       <Link 
-                                        href={`/dashboard/patients/view_patient/${alert.patientId._id}`}
+                                        href={`/dashboard/patients/vitals/${typeof alert.patientId === 'object' ? alert.patientId._id : alert.patientId}`}
                                         className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                                         onClick={(e) => e.stopPropagation()}
                                       >
@@ -830,61 +926,6 @@ export default function AlertsPage() {
                           {alert.description}
                         </p>
                         
-                        {/* Alert specific details */}
-                        {alert.vitalSign && (
-                          <div className="mt-2 bg-white bg-opacity-50 rounded-md p-2 text-sm">
-                            <div className="flex items-center text-gray-700">
-                              {alert.vitalSign.type === 'temperature' && (
-                                <Thermometer className="h-4 w-4 mr-1.5 text-red-500" />
-                              )}
-                              {alert.vitalSign.type === 'heart_rate' && (
-                                <Heart className="h-4 w-4 mr-1.5 text-red-500" />
-                              )}
-                              {alert.vitalSign.type === 'oxygen_saturation' && (
-                                <Percent className="h-4 w-4 mr-1.5 text-blue-500" />
-                              )}
-                              <span className="font-medium">
-                                {alert.vitalSign.type.replace('_', ' ')}: 
-                              </span>
-                              <span className="ml-2">
-                                {alert.vitalSign.value} {alert.vitalSign.unit}
-                              </span>
-                              <span className="mx-2 text-gray-400">|</span>
-                              <span className="text-gray-600">
-                                Threshold: {alert.vitalSign.threshold} {alert.vitalSign.unit}
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                        
-                        {alert.appointment && (
-                          <div className="mt-2 bg-white bg-opacity-50 rounded-md p-2 text-sm">
-                            <div className="flex items-center text-gray-700">
-                              <Calendar className="h-4 w-4 mr-1.5 text-purple-500" />
-                              <span className="font-medium">
-                                {alert.appointment.type}: 
-                              </span>
-                              <span className="ml-2">
-                                {new Date(alert.appointment.date).toLocaleDateString('en-US', {
-                                  weekday: 'short',
-                                  month: 'short',
-                                  day: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
-                              </span>
-                              {alert.appointment.location && (
-                                <>
-                                  <span className="mx-2 text-gray-400">|</span>
-                                  <span className="text-gray-600">
-                                    {alert.appointment.location}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                        
                         {/* Alert footer info */}
                         <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
                           <span>{formatDate(alert.createdAt)}</span>
@@ -892,12 +933,12 @@ export default function AlertsPage() {
                           <div className="flex items-center">
                             {alert.status && (
                               <span className={`capitalize px-2 py-0.5 rounded-full ${
-                                alert.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
-                                alert.status === 'resolved' ? 'bg-green-100 text-green-800' :
-                                alert.status === 'read' ? 'bg-blue-100 text-blue-800' :
+                                alertStatus === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                                alertStatus === 'resolved' ? 'bg-green-100 text-green-800' :
+                                alertStatus === 'read' ? 'bg-blue-100 text-blue-800' :
                                 'bg-gray-100 text-gray-800'
                               }`}>
-                                {alert.status.replace('_', ' ')}
+                                {alertStatus.replace('_', ' ')}
                               </span>
                             )}
                           </div>

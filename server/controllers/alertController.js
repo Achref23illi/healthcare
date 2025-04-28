@@ -21,7 +21,20 @@ exports.getAlerts = async (req, res) => {
       .sort({ createdAt: -1 })
       .populate('patient', 'firstName lastName age');
     
-    res.json(alerts);
+    // Map to expected format for frontend
+    const formattedAlerts = alerts.map(alert => ({
+      _id: alert._id,
+      title: `${alert.type.replace('_', ' ')} alert`,
+      description: alert.message,
+      patientId: alert.patient,
+      status: alert.status.toLowerCase(),
+      priority: alert.severity.toLowerCase(),
+      createdAt: alert.createdAt,
+      updatedAt: alert.updatedAt || alert.createdAt,
+      type: alert.type
+    }));
+    
+    res.json(formattedAlerts);
   } catch (error) {
     console.error('Error fetching alerts:', error);
     res.status(500).json({ message: 'Server error' });
