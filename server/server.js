@@ -24,19 +24,59 @@ app.use(cors({
 app.use(passport.initialize());
 require('./config/passport')(passport);
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI, {})
-.then(() => {
-  console.log('MongoDB Connected Successfully');
-  // Start the server after successful MongoDB connection
+// Connect to MongoDB with prioritizing local connection
+const connectWithRetry = async () => {
+  // Connection options with better timeout handling
+  const options = {
+    serverSelectionTimeoutMS: 10000, // Timeout after 10 seconds
+    socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+    family: 4, // Use IPv4, skip trying IPv6
+    retryWrites: true
+  };
+
+  try {
+    // First try local MongoDB connection
+    console.log('Attempting to connect to local MongoDB...');
+    await mongoose.connect(process.env.MONGO_URI_LOCAL, options);
+    console.log('Connected to local MongoDB successfully');
+    startServer();
+  } catch (localErr) {
+    console.error('Local MongoDB Connection Error:', localErr.message);
+    console.log('Local MongoDB connection failed. Trying MongoDB Atlas...');
+    
+    // If local connection fails, try MongoDB Atlas
+    try {
+      await mongoose.connect(process.env.MONGO_URI, options);
+      console.log('Connected to MongoDB Atlas successfully');
+      startServer();
+    } catch (atlasErr) {
+      console.error('MongoDB Atlas Connection Error:', atlasErr.message);
+      
+      // Try direct connection as a last resort
+      try {
+        console.log('Trying direct connection to MongoDB Atlas...');
+        await mongoose.connect(process.env.MONGO_URI_DIRECT, options);
+        console.log('Connected to MongoDB Atlas using direct connection');
+        startServer();
+      } catch (directErr) {
+        console.error('All MongoDB connection attempts failed');
+        console.error('Direct connection error:', directErr.message);
+        console.log('Please ensure MongoDB is running locally or check your internet connection');
+        process.exit(1);
+      }
+    }
+  }
+};
+
+// Start the Express server
+const startServer = () => {
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
-})
-.catch(err => {
-  console.error('MongoDB Connection Error:', err.message);
-  process.exit(1);
-});
+};
+
+// Call the connection function
+connectWithRetry();
 
 // You can add this to your server.js temporarily to check if alerts exist
 app.get('/api/debug/alerts', async (req, res) => {
@@ -46,6 +86,43 @@ app.get('/api/debug/alerts', async (req, res) => {
     res.json({ count: alerts.length, alerts });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Add diagnostic route to check MongoDB connection status
+app.get('/api/status', async (req, res) => {
+  try {
+    // Check MongoDB connection
+    const dbState = mongoose.connection.readyState;
+    const states = {
+      0: 'disconnected',
+      1: 'connected',
+      2: 'connecting',
+      3: 'disconnecting',
+      4: 'invalid credentials'
+    };
+    
+    // Ping database to check actual connectivity
+    const pingResult = await mongoose.connection.db.admin().ping();
+    
+    res.json({ 
+      status: 'success',
+      database: {
+        state: states[dbState],
+        connectionOK: dbState === 1,
+        ping: pingResult.ok === 1 ? 'successful' : 'failed'
+      },
+      server: {
+        uptime: Math.floor(process.uptime()),
+        memoryUsage: process.memoryUsage()
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      status: 'error', 
+      message: 'Error checking server status', 
+      error: error.message 
+    });
   }
 });
 
@@ -61,6 +138,15 @@ app.use('/api/appointments', require('./routes/appointmentRoutes'));
 // Basic route for testing
 app.get('/', (req, res) => {
   res.send('Healthcare Monitoring API is running...');
+});
+
+// Add a route to handle /api base path
+app.get('/api', (req, res) => {
+  res.json({ 
+    message: 'Healthcare Monitoring API is running',
+    status: 'online',
+    version: '1.0.0'
+  });
 });
 
 // Error handling middleware

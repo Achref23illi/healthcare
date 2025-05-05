@@ -302,7 +302,11 @@ export default function RecordVitals() {
             <h3 className="text-lg font-medium text-gray-900 mb-4">Latest Readings Summary</h3>
             <div className="grid grid-cols-1 gap-4">
               {Object.keys(vitalDisplayNames).map(type => {
-                const latestVital = patient?.vitalSigns?.filter(v => v.type === type)[0];
+                // Find the latest vital sign for this type by sorting them by timestamp
+                const vitalsOfType = patient?.vitalSigns?.filter(v => v.type === type) || [];
+                const latestVital = vitalsOfType.length > 0 ? 
+                  [...vitalsOfType].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0] : null;
+                
                 return (
                   <div key={type} className="flex items-center p-3 border rounded-lg bg-gray-50">
                     <div className="mr-3">
@@ -357,7 +361,11 @@ export default function RecordVitals() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {patient?.vitalSigns && patient.vitalSigns.length > 0 ? (
-                  patient.vitalSigns.slice(0, 10).map((vital, index) => (
+                  // Sort vital signs by timestamp in descending order (newest first)
+                  [...patient.vitalSigns]
+                    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                    .slice(0, 20)
+                    .map((vital, index) => (
                     <tr key={index} className={vital.isAlert ? "bg-red-50" : ""}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -370,7 +378,9 @@ export default function RecordVitals() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                        {vital.value} {vital.unit}
+                        <span className={vital.isAlert ? "text-red-600" : ""}>
+                          {vital.value} {vital.unit}
+                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(vital.timestamp).toLocaleDateString()} at {new Date(vital.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}

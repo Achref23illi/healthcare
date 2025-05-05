@@ -62,6 +62,51 @@ export default function AlertsPage() {
     resolved: 0
   });
 
+  // Fetch alerts from API
+  const fetchAlerts = async () => {
+    try {
+      setIsLoading(true);
+      
+      const config = {
+        headers: {
+          Authorization: `Bearer ${user.token}`,
+        },
+      };
+      
+      console.log('Re-fetching alerts...');
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/alerts`, config);
+      console.log('Alerts response:', response.data);
+      
+      const realAlerts = response.data;
+      setAlerts(realAlerts);
+      setFilteredAlerts(realAlerts);
+
+      // Recalculate stats
+      const calculatedStats = realAlerts.reduce((stats, alert) => {
+        const status = alert.status.toLowerCase();
+        const priority = alert.priority.toLowerCase();
+        
+        if (status === 'resolved') {
+          stats.resolved++;
+        } else if (priority === 'critical') {
+          stats.critical++;
+        } else if (priority === 'high' || priority === 'medium') {
+          stats.warning++;
+        } else {
+          stats.info++;
+        }
+        return stats;
+      }, { critical: 0, warning: 0, info: 0, resolved: 0 });
+
+      setStats(calculatedStats);
+    } catch (err) {
+      console.error('Error fetching alerts:', err);
+      setError('Failed to load alerts. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Check authentication and role
   useEffect(() => {
     if (!user) {
@@ -77,52 +122,6 @@ export default function AlertsPage() {
   // Fetch alerts from API
   useEffect(() => {
     if (!user?.token) return;
-    
-    // Add a fetchAlerts function at the top level of the component
-const fetchAlerts = async () => {
-  try {
-    setIsLoading(true);
-    
-    const config = {
-      headers: {
-        Authorization: `Bearer ${user.token}`,
-      },
-    };
-    
-    console.log('Re-fetching alerts...');
-    const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/alerts`, config);
-    console.log('Alerts response:', response.data);
-    
-    const realAlerts = response.data;
-    setAlerts(realAlerts);
-    setFilteredAlerts(realAlerts);
-
-    // Recalculate stats
-    const calculatedStats = realAlerts.reduce((stats, alert) => {
-      const status = alert.status.toLowerCase();
-      const priority = alert.priority.toLowerCase();
-      
-      if (status === 'resolved') {
-        stats.resolved++;
-      } else if (priority === 'critical') {
-        stats.critical++;
-      } else if (priority === 'high' || priority === 'medium') {
-        stats.warning++;
-      } else {
-        stats.info++;
-      }
-      return stats;
-    }, { critical: 0, warning: 0, info: 0, resolved: 0 });
-
-    setStats(calculatedStats);
-  } catch (err) {
-    console.error('Error fetching alerts:', err);
-    setError('Failed to load alerts. Please try again.');
-  } finally {
-    setIsLoading(false);
-  }
-};
-    
     fetchAlerts();
   }, [user, logout]);
 
@@ -232,21 +231,21 @@ const updateAlertStatus = async (alertId, newStatus) => {
     
     console.log('API response:', response.data);
     
-    // Update UI
-    setAlerts(alerts.map(alert => 
+    // Update local state immediately for better UI responsiveness
+    setAlerts(prevAlerts => prevAlerts.map(alert => 
       alert._id === alertId 
-        ? { ...alert, status: apiStatus, updatedAt: new Date() } 
+        ? { ...alert, status: apiStatus, updatedAt: new Date().toISOString() } 
         : alert
     ));
-    
-    console.log('Alerts after update:', alerts);
     
     // Force a re-fetch of alerts to ensure state is in sync with backend
     fetchAlerts();
     
+    // Close the actions dropdown
     setOpenActions(null);
   } catch (error) {
     console.error('Error updating alert status:', error.response?.data || error);
+    alert('Failed to update alert status. Please try again.');
   }
 };
 
@@ -417,6 +416,47 @@ const updateAlertStatus = async (alertId, newStatus) => {
     }
   };
 
+  // Group alerts by patient
+  const groupAlertsByPatient = (alerts) => {
+    const groupedAlerts = {};
+    
+    alerts.forEach(alert => {
+      // Check if patientId exists and is an object with _id
+      if (alert.patientId && typeof alert.patientId === 'object' && alert.patientId._id) {
+        const patientId = alert.patientId._id;
+        if (!groupedAlerts[patientId]) {
+          groupedAlerts[patientId] = {
+            patient: {
+              id: patientId,
+              name: `${alert.patientId.firstName || ''} ${alert.patientId.lastName || ''}`,
+              age: alert.patientId.age,
+              // Add other patient details you want to display
+            },
+            alerts: []
+          };
+        }
+        groupedAlerts[patientId].alerts.push(alert);
+      } else {
+        // For alerts without a proper patient reference, group under "Unknown"
+        const unknownId = 'unknown';
+        if (!groupedAlerts[unknownId]) {
+          groupedAlerts[unknownId] = {
+            patient: {
+              id: unknownId,
+              name: 'Unknown Patient',
+              age: null
+            },
+            alerts: []
+          };
+        }
+        groupedAlerts[unknownId].alerts.push(alert);
+      }
+    });
+    
+    // Convert the groupedAlerts object to an array for easier rendering
+    return Object.values(groupedAlerts);
+  };
+
   if (!user || user.role !== 'doctor') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
@@ -428,284 +468,129 @@ const updateAlertStatus = async (alertId, newStatus) => {
 
   return (
     <DoctorDashboardLayout>
-      <div className="h-full flex flex-col">
-        {/* Header */}
-        <div className="bg-white rounded-xl shadow-sm mb-6 overflow-hidden border border-gray-200">
-          <div className="px-6 py-5 flex flex-col md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center mb-4 md:mb-0">
-              <div className="h-10 w-10 bg-indigo-100 rounded-lg flex items-center justify-center mr-4">
-                <Bell className="h-5 w-5 text-indigo-600" />
+      <div className="flex flex-col md:flex-row gap-6 min-h-screen w-full bg-gray-50 overflow-hidden">
+        {/* Sidebar for stats, search, and type/priority filters */}
+        <aside className="w-full md:w-80 flex-shrink-0 mb-4 md:mb-0 sticky top-0 self-start z-10 h-fit md:h-[calc(100vh-2rem)] overflow-visible">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <Bell className="h-5 w-5 text-indigo-600" /> Alerts & Notifications
+            </h2>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-1">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-red-50 border border-red-100">
+                <AlertCircle className="h-6 w-6 text-red-600" />
+                <div>
+                  <div className="text-xs text-red-700 font-semibold">Critical</div>
+                  <div className="text-lg font-bold text-gray-900">{stats.critical}</div>
+                </div>
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">Alerts & Notifications</h1>
-                <p className="text-sm text-gray-500 mt-0.5">Monitor and manage clinical alerts</p>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 border border-amber-100">
+                <AlertTriangle className="h-6 w-6 text-amber-600" />
+                <div>
+                  <div className="text-xs text-amber-700 font-semibold">Warnings</div>
+                  <div className="text-lg font-bold text-gray-900">{stats.warning}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 border border-blue-100">
+                <Info className="h-6 w-6 text-blue-600" />
+                <div>
+                  <div className="text-xs text-blue-700 font-semibold">Info</div>
+                  <div className="text-lg font-bold text-gray-900">{stats.info}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 border border-green-100">
+                <CheckCircle className="h-6 w-6 text-green-600" />
+                <div>
+                  <div className="text-xs text-green-700 font-semibold">Resolved</div>
+                  <div className="text-lg font-bold text-gray-900">{stats.resolved}</div>
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+          </div>
+          {/* Search and Filters */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-gray-700 mb-1">Search</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                  placeholder="Search alerts..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <Search className="h-4 w-4 text-gray-400 absolute left-2 top-2.5" />
+              </div>
+            </div>
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-gray-700 mb-1">Type</label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                value={filters.type}
+                onChange={(e) => setFilters({ ...filters, type: e.target.value })}
+              >
+                <option value="all">All Types</option>
+                <option value="vital_sign">Vital Signs</option>
+                <option value="medication">Medication</option>
+                <option value="lab_result">Lab Results</option>
+                <option value="appointment">Appointments</option>
+                <option value="message">Messages</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-gray-700 mb-1">Priority</label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                value={filters.priority}
+                onChange={(e) => setFilters({ ...filters, priority: e.target.value })}
+              >
+                <option value="all">All Priorities</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+          </div>
+        </aside>
+        {/* Main content */}
+        <main className="flex-1 w-full overflow-x-hidden overflow-y-auto max-h-[calc(100vh-2rem)] px-1 md:px-0">
+          {/* Top bar for status filter and clear button */}
+          <div className="sticky top-0 z-20 bg-gradient-to-r from-indigo-50 via-blue-50 to-white border-b border-indigo-100 flex flex-col sm:flex-row items-center justify-between px-4 py-3 mb-4 gap-3 shadow-sm rounded-xl">
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <span className="inline-flex items-center px-2 py-1 bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-lg">
+                <CheckCircle className="h-4 w-4 mr-1 text-indigo-500" />
+                Status
+              </span>
+              <select
+                id="status-filter"
+                className="px-4 py-2 border border-indigo-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition"
+                value={filters.status}
+                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              >
+                <option value="all">All Statuses</option>
+                <option value="unread">Unread</option>
+                <option value="in_progress">In Progress</option>
+                <option value="resolved">Resolved</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+              <span className="text-xs text-gray-700 hidden sm:inline-block font-medium bg-white px-3 py-1 rounded-lg border border-gray-200">
+                {filteredAlerts.length} Alerts
+              </span>
               <button
                 onClick={() => {
-                  setIsLoading(true);
-                  setTimeout(() => {
-                    window.location.reload();
-                  }, 500);
+                  setSearchTerm('');
+                  setFilters({ ...filters, status: 'all', type: 'all', priority: 'all' });
                 }}
-                className="inline-flex items-center px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors duration-200 shadow-sm"
+                className="flex items-center gap-1 px-4 py-2 text-xs font-semibold bg-white text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 hover:text-indigo-700 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 shadow-none"
               >
-                <RefreshCw className="mr-1.5 h-4 w-4 text-gray-500" />
-                Refresh
+                <X className="h-4 w-4 mr-1" />
+                Clear Filters
               </button>
-              {selectedAlerts.length > 0 && (
-                <button
-                  onClick={markSelectedAsRead}
-                  className="inline-flex items-center px-3 py-1.5 bg-indigo-600 border border-transparent rounded-lg text-sm font-medium text-white hover:bg-indigo-700 transition-colors duration-200 shadow-sm"
-                >
-                  <CheckCircle className="mr-1.5 h-4 w-4" />
-                  Mark as Read ({selectedAlerts.length})
-                </button>
-              )}
             </div>
           </div>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-red-50 border border-red-100 rounded-xl shadow-sm p-4">
-            <div className="flex items-center">
-              <div className="h-10 w-10 bg-red-100 rounded-lg flex items-center justify-center mr-4">
-                <AlertCircle className="h-5 w-5 text-red-600" />
-              </div>
-              <div>
-                <p className="text-sm text-red-700 font-medium">Critical</p>
-                <h3 className="text-2xl font-bold text-gray-900">{stats.critical}</h3>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-amber-50 border border-amber-100 rounded-xl shadow-sm p-4">
-            <div className="flex items-center">
-              <div className="h-10 w-10 bg-amber-100 rounded-lg flex items-center justify-center mr-4">
-                <AlertTriangle className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-sm text-amber-700 font-medium">Warnings</p>
-                <h3 className="text-2xl font-bold text-gray-900">{stats.warning}</h3>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-blue-50 border border-blue-100 rounded-xl shadow-sm p-4">
-            <div className="flex items-center">
-              <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
-                <Info className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm text-blue-700 font-medium">Information</p>
-                <h3 className="text-2xl font-bold text-gray-900">{stats.info}</h3>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-green-50 border border-green-100 rounded-xl shadow-sm p-4">
-            <div className="flex items-center">
-              <div className="h-10 w-10 bg-green-100 rounded-lg flex items-center justify-center mr-4">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-sm text-green-700 font-medium">Resolved</p>
-                <h3 className="text-2xl font-bold text-gray-900">{stats.resolved}</h3>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Search and Filter Bar */}
-        <div className="bg-white rounded-xl shadow-sm mb-6 p-4 border border-gray-200">
-          <div className="flex flex-col md:flex-row gap-4">
-            {/* Search */}
-            <div className="w-full md:w-1/3 relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-gray-400" aria-hidden="true" />
-              </div>
-              <input
-                type="text"
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="Search alerts..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            
-            {/* Filters */}
-            <div className="flex gap-3 flex-wrap">
-              <div className="relative" ref={filterMenuRef}>
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setFilterMenuOpen(!filterMenuOpen);
-                  }}
-                  type="button"
-                  className="flex items-center px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  <Filter className="mr-2 h-4 w-4 text-gray-500" />
-                  Filters
-                  <ChevronDown className="ml-1 h-4 w-4 text-gray-500" />
-                </button>
-                
-                {filterMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
-                    <div className="p-4">
-                      <div className="flex justify-between items-center mb-3">
-                        <h3 className="text-sm font-medium text-gray-900">Filter Alerts</h3>
-                        <button 
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setFilters({
-                              type: 'all',
-                              priority: 'all',
-                              status: 'all'
-                            });
-                          }}
-                          type="button"
-                          className="text-xs text-indigo-600 hover:text-indigo-800"
-                        >
-                          Reset
-                        </button>
-                      </div>
-                      
-                      {/* Alert Type Filter */}
-                      <div className="mb-3">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Alert Type</label>
-                        <select 
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                          value={filters.type}
-                          onChange={(e) => setFilters({...filters, type: e.target.value})}
-                        >
-                          <option value="all">All Types</option>
-                          <option value="vital_sign">Vital Signs</option>
-                          <option value="medication">Medication</option>
-                          <option value="lab_result">Lab Results</option>
-                          <option value="appointment">Appointments</option>
-                          <option value="message">Messages</option>
-                          <option value="custom">Custom</option>
-                        </select>
-                      </div>
-                      
-                      {/* Priority Filter */}
-                      <div className="mb-3">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
-                        <select 
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                          value={filters.priority}
-                          onChange={(e) => setFilters({...filters, priority: e.target.value})}
-                        >
-                          <option value="all">All Priorities</option>
-                          <option value="critical">Critical</option>
-                          <option value="high">High</option>
-                          <option value="medium">Medium</option>
-                          <option value="low">Low</option>
-                        </select>
-                      </div>
-                      
-                      {/* Status Filter */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                        <select 
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                          value={filters.status}
-                          onChange={(e) => setFilters({...filters, status: e.target.value})}
-                        >
-                          <option value="all">All Statuses</option>
-                          <option value="unread">Unread</option>
-                          <option value="in_progress">In Progress</option>
-                          <option value="resolved">Resolved</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-              
-              {/* Sort buttons */}
-              <button
-                onClick={() => requestSort('createdAt')}
-                type="button"
-                className="flex items-center px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                <Clock className="mr-2 h-4 w-4 text-gray-500" />
-                {sortConfig.key === 'createdAt' ? (
-                  sortConfig.direction === 'ascending' ? 'Oldest First' : 'Newest First'
-                ) : 'Sort by Date'}
-                {sortConfig.key === 'createdAt' && (
-                  sortConfig.direction === 'ascending' ? 
-                    <ChevronUp className="ml-1 h-4 w-4 text-gray-500" /> :
-                    <ChevronDown className="ml-1 h-4 w-4 text-gray-500" />
-                )}
-              </button>
-              
-              {/* Active Filters */}
-              <div className="flex flex-wrap gap-2">
-                {filters.type !== 'all' && (
-                  <div className="bg-indigo-50 text-indigo-700 text-xs rounded-full px-3 py-1 flex items-center">
-                    Type: {filters.type.replace('_', ' ')}
-                    <button 
-                      onClick={() => setFilters({...filters, type: 'all'})}
-                      className="ml-1 focus:outline-none"
-                      type="button"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                )}
-                
-                {filters.priority !== 'all' && (
-                  <div className="bg-indigo-50 text-indigo-700 text-xs rounded-full px-3 py-1 flex items-center">
-                    Priority: {filters.priority}
-                    <button 
-                      onClick={() => setFilters({...filters, priority: 'all'})}
-                      className="ml-1 focus:outline-none"
-                      type="button"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                )}
-                
-                {filters.status !== 'all' && (
-                  <div className="bg-indigo-50 text-indigo-700 text-xs rounded-full px-3 py-1 flex items-center">
-                    Status: {filters.status.replace('_', ' ')}
-                    <button 
-                      onClick={() => setFilters({...filters, status: 'all'})}
-                      className="ml-1 focus:outline-none"
-                      type="button"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                )}
-              </div>
-              
-              {/* Selection count */}
-              {selectedAlerts.length > 0 && (
-                <div className="ml-auto">
-                  <div className="bg-indigo-50 rounded-lg px-3 py-2 flex items-center">
-                    <span className="text-sm text-indigo-700 mr-3">{selectedAlerts.length} selected</span>
-                    <button 
-                      onClick={() => setSelectedAlerts([])}
-                      className="text-sm text-indigo-600 hover:text-indigo-800"
-                      type="button"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Alerts Content */}
-        <div className="flex-1 overflow-hidden">
+          {/* Alerts grid */}
           {isLoading ? (
             <div className="flex flex-col items-center justify-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
@@ -725,224 +610,56 @@ const updateAlertStatus = async (alertId, newStatus) => {
               </div>
               <p className="mt-4 text-gray-600">No alerts found</p>
               <p className="text-sm text-gray-500 mt-1">
-                {searchTerm || filters.type !== 'all' || filters.priority !== 'all' || filters.status !== 'all' 
-                  ? 'Try adjusting your filters or search terms' 
+                {searchTerm || filters.type !== 'all' || filters.priority !== 'all' || filters.status !== 'all'
+                  ? 'Try adjusting your filters or search terms'
                   : 'You have no alerts at this time'}
               </p>
-              {(searchTerm || filters.type !== 'all' || filters.priority !== 'all' || filters.status !== 'all') && (
-                <button 
-                  onClick={() => {
-                    setSearchTerm('');
-                    setFilters({
-                      type: 'all',
-                      priority: 'all',
-                      status: 'all'
-                    });
-                  }}
-                  className="mt-4 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  type="button"
-                >
-                  Clear All Filters
-                </button>
-              )}
             </div>
           ) : (
-            <div className="space-y-4 overflow-auto max-h-[calc(100vh-320px)] pr-1">
-              {/* Select all checkbox */}
-              <div className="flex items-center mb-2 pl-4">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                  checked={selectedAlerts.length === filteredAlerts.length && filteredAlerts.length > 0}
-                  onChange={handleSelectAll}
-                  id="select-all"
-                />
-                <label htmlFor="select-all" className="ml-2 text-sm text-gray-600">
-                  Select all
-                </label>
-                <span className="ml-auto text-sm text-gray-500">
-                  {filteredAlerts.length} alert{filteredAlerts.length !== 1 ? 's' : ''}
-                </span>
-              </div>
-              
-              {filteredAlerts.map(alert => {
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filteredAlerts.map((alert) => {
                 const priorityColors = getPriorityColors(alert.priority);
                 const alertStatus = normalizeStatus(alert.status);
-                
                 return (
-                  <div 
-                    key={alert._id} 
-                    className={`border rounded-xl p-4 shadow-sm transition-all duration-200 ${
-                      priorityColors.bg
-                    } ${
-                      priorityColors.border
-                    } ${
-                      alertStatus === 'unread' ? 'border-l-4' : ''
-                    }`}
+                  <div
+                    key={alert._id}
+                    className={`flex flex-col h-full rounded-xl border ${priorityColors.border} bg-white shadow-sm p-4 transition hover:shadow-md`}
                   >
-                    <div className="flex items-start">
-                      {/* Checkbox */}
-                      <div className="mr-3 mt-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center ${priorityColors.bg}`}>{getAlertTypeIcon(alert.type)}</div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-semibold ${priorityColors.text}`}>{alert.priority}</span>
+                          {alertStatus === 'resolved' && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 ml-2">Resolved</span>
+                          )}
+                        </div>
+                        <div className="text-sm font-bold text-gray-900 line-clamp-1">{alert.title || `${alert.type.replace('_', ' ')} alert`}</div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-500 mb-2 flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      {alert.patientId && typeof alert.patientId === 'object' ? `${alert.patientId.firstName} ${alert.patientId.lastName}` : 'Unknown Patient'}
+                    </div>
+                    <div className="text-sm text-gray-700 mb-2 line-clamp-2">{alert.description}</div>
+                    <div className="flex items-center justify-between mt-auto pt-2">
+                      <span className="text-xs text-gray-400 flex items-center gap-1"><Clock className="h-3 w-3" />{formatDate(alert.createdAt)}</span>
+                      <div className="flex gap-2">
                         <input
                           type="checkbox"
                           className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                           checked={selectedAlerts.includes(alert._id)}
                           onChange={(e) => handleSelectAlert(e, alert._id)}
                         />
-                      </div>
-                      
-                      {/* Alert icon */}
-                      <div className={`h-10 w-10 rounded-full flex items-center justify-center mr-4 ${
-                        alert.priority === 'critical' ? 'bg-red-100' : 
-                        alert.priority === 'high' ? 'bg-amber-100' : 
-                        'bg-blue-100'
-                      }`}>
-                        {getAlertTypeIcon(alert.type)}
-                      </div>
-                      
-                      {/* Alert content */}
-                      <div className="flex-1">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h3 className={`font-medium ${priorityColors.text}`}>
-                              {alert.title || `${alert.type.replace('_', ' ')} Alert`}
-                            </h3>
-                            
-                            {/* Patient info if applicable */}
-                            {alert.patientId && (
-                              <div className="flex items-center mt-1 text-sm text-gray-600">
-                                <User className="h-3.5 w-3.5 mr-1" />
-                                <Link 
-                                  href={`/dashboard/patients/vitals/${typeof alert.patientId === 'object' ? alert.patientId._id : alert.patientId}`}
-                                  className="font-medium text-indigo-600 hover:text-indigo-800"
-                                >
-                                  {typeof alert.patientId === 'object' ? 
-                                    `${alert.patientId.firstName || ''} ${alert.patientId.lastName || ''}` : 
-                                    'View Patient'}
-                                </Link>
-                                {typeof alert.patientId === 'object' && alert.patientId.age && (
-                                  <>
-                                    <span className="mx-1">•</span>
-                                    <span>{alert.patientId.age} years</span>
-                                  </>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          
-                          <div className="flex items-center">
-                            {/* Priority badge */}
-                            <span className={`text-xs font-medium rounded-full px-2.5 py-0.5 ${priorityColors.badge}`}>
-                              {alert.priority}
-                            </span>
-                            
-                            {/* Status indicator */}
-                            {alertStatus === 'unread' && (
-                              <div className="ml-2 h-2 w-2 rounded-full bg-blue-600"></div>
-                            )}
-                            
-                            {/* Actions menu */}
-                            <div className="relative ml-2" ref={actionsMenuRef}>
-                              <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setOpenActions(openActions === alert._id ? null : alert._id);
-                                }}
-                                type="button"
-                                className="text-gray-400 hover:text-gray-500 focus:outline-none"
-                                aria-label="Alert actions"
-                              >
-                                <MoreHorizontal className="h-5 w-5" />
-                              </button>
-                              
-                              {openActions === alert._id && (
-                                <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
-                                  <div className="py-1">
-                                    {alertStatus === 'unread' && (
-                                      <button 
-                                        onClick={() => updateAlertStatus(alert._id, 'read')}
-                                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
-                                        type="button"
-                                      >
-                                        <CheckCircle className="h-4 w-4 mr-3 text-gray-500" />
-                                        Mark as Read
-                                      </button>
-                                    )}
-                                    
-                                    {(alertStatus === 'unread' || alertStatus === 'read') && (
-                                      <button 
-                                        onClick={() => updateAlertStatus(alert._id, 'in_progress')}
-                                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
-                                        type="button"
-                                      >
-                                        <ArrowUpDown className="h-4 w-4 mr-3 text-gray-500" />
-                                        Mark In Progress
-                                      </button>
-                                    )}
-                                    
-                                    {alertStatus !== 'resolved' && (
-                                      <button 
-                                        onClick={() => updateAlertStatus(alert._id, 'resolved')}
-                                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
-                                        type="button"
-                                      >
-                                        <CheckCircle className="h-4 w-4 mr-3 text-green-500" />
-                                        Resolve Alert
-                                      </button>
-                                    )}
-                                    
-                                    {alert.patientId && (
-                                      <Link 
-                                        href={`/dashboard/patients/vitals/${typeof alert.patientId === 'object' ? alert.patientId._id : alert.patientId}`}
-                                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
-                                        <ExternalLink className="h-4 w-4 mr-3 text-gray-500" />
-                                        View Patient
-                                      </Link>
-                                    )}
-                                    
-                                    <button 
-                                      onClick={() => {
-                                        setOpenActions(null);
-                                        // Additional logic to permanently dismiss alert could go here
-                                      }}
-                                      className="flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left"
-                                      type="button"
-                                    >
-                                      <EyeOff className="h-4 w-4 mr-3 text-red-500" />
-                                      Dismiss
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* Alert description */}
-                        <p className="mt-1 text-sm text-gray-700">
-                          {alert.description}
-                        </p>
-                        
-                        {/* Alert footer info */}
-                        <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
-                          <span>{formatDate(alert.createdAt)}</span>
-                          
-                          <div className="flex items-center">
-                            {alert.status && (
-                              <span className={`capitalize px-2 py-0.5 rounded-full ${
-                                alertStatus === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
-                                alertStatus === 'resolved' ? 'bg-green-100 text-green-800' :
-                                alertStatus === 'read' ? 'bg-blue-100 text-blue-800' :
-                                'bg-gray-100 text-gray-800'
-                              }`}>
-                                {alertStatus.replace('_', ' ')}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                        {alertStatus !== 'resolved' && (
+                          <button
+                            onClick={() => updateAlertStatus(alert._id, 'resolved')}
+                            className="px-3 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 transition-colors"
+                            type="button"
+                          >
+                            Resolve
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -950,7 +667,7 @@ const updateAlertStatus = async (alertId, newStatus) => {
               })}
             </div>
           )}
-        </div>
+        </main>
       </div>
     </DoctorDashboardLayout>
   );

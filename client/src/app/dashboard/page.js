@@ -9,7 +9,7 @@ import Link from 'next/link';
 import { 
   Bell, Calendar, Users, User, Activity, TrendingUp, ArrowUp, ArrowDown, 
   Loader, Plus, FileText, ClipboardList, AlertCircle, Thermometer,
-  Heart, Clock, Clipboard, Zap, UserPlus, ChevronRight, CheckCircle
+  Heart, Clock, Clipboard, Zap, UserPlus, ChevronRight, CheckCircle, RefreshCw
 } from 'lucide-react';
 
 export default function DoctorDashboard() {
@@ -18,6 +18,7 @@ export default function DoctorDashboard() {
   const [dashboardData, setDashboardData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [apiHealth, setApiHealth] = useState({ isConnected: false, message: null });
 
   // Update current time every minute
   useEffect(() => {
@@ -41,10 +42,14 @@ export default function DoctorDashboard() {
       try {
         if (!user?.token) return;
 
+        console.log('Fetching dashboard stats with API URL:', process.env.NEXT_PUBLIC_API_URL);
+        
         const config = {
           headers: {
             Authorization: `Bearer ${user.token}`
-          }
+          },
+          // Add timeout to avoid hanging requests
+          timeout: 10000
         };
 
         const response = await axios.get(
@@ -52,10 +57,23 @@ export default function DoctorDashboard() {
           config
         );
 
+        console.log('Dashboard data received:', response.data);
         setDashboardData(response.data);
         setIsLoading(false);
       } catch (error) {
         console.error('Error fetching dashboard stats:', error);
+        
+        // More detailed error logging
+        if (error.response) {
+          // The request was made and the server responded with a status code
+          // that falls out of the range of 2xx
+          console.error('Error response data:', error.response.data);
+          console.error('Error response status:', error.response.status);
+        } else if (error.request) {
+          // The request was made but no response was received
+          console.error('No response received:', error.request);
+        }
+        
         setIsLoading(false);
       }
     };
@@ -64,6 +82,30 @@ export default function DoctorDashboard() {
       fetchDashboardStats();
     }
   }, [user]);
+
+  // Simple check to test if the API server is reachable
+  useEffect(() => {
+    const checkApiHealth = async () => {
+      try {
+        const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}`, {
+          timeout: 5000
+        });
+        setApiHealth({ 
+          isConnected: true, 
+          message: 'API connection successful'
+        });
+        console.log('API server is reachable:', response.data);
+      } catch (error) {
+        console.error('API server health check failed:', error);
+        setApiHealth({ 
+          isConnected: false, 
+          message: error.message || 'Unable to connect to server'
+        });
+      }
+    };
+
+    checkApiHealth();
+  }, []);
 
   // Sample data for upcoming appointments
   const upcomingAppointments = [
@@ -102,8 +144,49 @@ export default function DoctorDashboard() {
     );
   }
 
+  // Fallback data in case the API call fails
+  const fallbackData = {
+    patientStats: { total: 0, new: 0, active: 0 },
+    alertStats: { byStatus: { New: 0, Acknowledged: 0, Resolved: 0 } },
+    criticalPatients: [],
+    appointments: [],
+    recentActivity: []
+  };
+
+  // Use dashboardData if available, otherwise use fallback data
+  const displayData = dashboardData || fallbackData;
+
   return (
     <DoctorDashboardLayout>
+      {/* API Status Indicator - only show when there's a connection problem */}
+      {!apiHealth.isConnected && (
+        <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6 rounded-md">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <AlertCircle className="h-5 w-5 text-red-400" aria-hidden="true" />
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">API Connection Error</h3>
+              <div className="mt-2 text-sm text-red-700">
+                <p>Unable to connect to the API server. This might be causing data loading issues.</p>
+                <p className="mt-1"><strong>Error:</strong> {apiHealth.message}</p>
+                <p className="mt-1">Please check that your backend server is running at {process.env.NEXT_PUBLIC_API_URL}.</p>
+              </div>
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Reload Page
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="max-w-7xl mx-auto">
         {/* Enhanced Page Header with Greeting and Date */}
         <div className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-2xl shadow-md mb-6 overflow-hidden">
@@ -116,7 +199,7 @@ export default function DoctorDashboard() {
                 </h1>
               </div>
               <p className="mt-2 text-indigo-100 max-w-lg">
-                {formattedDate} • You have {dashboardData?.alertStats?.byStatus?.New || 0} new alerts and {upcomingAppointments.length} upcoming appointments today.
+                {formattedDate} • You have {displayData?.alertStats?.byStatus?.New || 0} new alerts and {upcomingAppointments.length} upcoming appointments today.
               </p>
             </div>
             <div className="mt-4 md:mt-0 flex space-x-3">
@@ -148,7 +231,7 @@ export default function DoctorDashboard() {
                 <div>
                   <p className="text-sm font-medium text-gray-500">Total Patients</p>
                   <h3 className="text-3xl font-bold mt-2 text-gray-800">
-                    {dashboardData?.patientStats?.total || '0'}
+                    {displayData?.patientStats?.total || '0'}
                   </h3>
                 </div>
                 <div className="bg-blue-100 p-3 rounded-lg shadow-sm">
@@ -179,9 +262,9 @@ export default function DoctorDashboard() {
                 <div>
                   <p className="text-sm font-medium text-gray-500">Active Alerts</p>
                   <h3 className="text-3xl font-bold mt-2 text-gray-800">
-                    {dashboardData ? 
-                      (dashboardData.alertStats?.byStatus?.New || 0) + 
-                      (dashboardData.alertStats?.byStatus?.Acknowledged || 0) : '0'}
+                    {displayData ? 
+                      (displayData.alertStats?.byStatus?.New || 0) + 
+                      (displayData.alertStats?.byStatus?.Acknowledged || 0) : '0'}
                   </h3>
                 </div>
                 <div className="bg-red-100 p-3 rounded-lg shadow-sm">
@@ -241,7 +324,7 @@ export default function DoctorDashboard() {
                 <div>
                   <p className="text-sm font-medium text-gray-500">Critical Patients</p>
                   <h3 className="text-3xl font-bold mt-2 text-gray-800">
-                    {dashboardData?.criticalPatients?.length || '0'}
+                    {displayData?.criticalPatients?.length || '0'}
                   </h3>
                 </div>
                 <div className="bg-orange-100 p-3 rounded-lg shadow-sm">
@@ -280,7 +363,7 @@ export default function DoctorDashboard() {
               </Link>
             </div>
             <div className="p-6">
-              {dashboardData && dashboardData.criticalPatients && dashboardData.criticalPatients.length > 0 ? (
+              {displayData && displayData.criticalPatients && displayData.criticalPatients.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full divide-y divide-gray-200">
                     <thead>
@@ -292,7 +375,7 @@ export default function DoctorDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {dashboardData.criticalPatients.map((patient, index) => (
+                      {displayData.criticalPatients.map((patient, index) => (
                         <tr key={index} className="hover:bg-gray-50 transition-colors duration-150">
                           <td className="px-4 py-4 whitespace-nowrap">
                             <div className="flex items-center">
