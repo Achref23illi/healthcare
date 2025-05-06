@@ -24,7 +24,7 @@ app.use(cors({
 app.use(passport.initialize());
 require('./config/passport')(passport);
 
-// Connect to MongoDB with prioritizing local connection
+// Connect to MongoDB with prioritizing Atlas connection
 const connectWithRetry = async () => {
   // Connection options with better timeout handling
   const options = {
@@ -35,33 +35,34 @@ const connectWithRetry = async () => {
   };
 
   try {
-    // First try local MongoDB connection
-    console.log('Attempting to connect to local MongoDB...');
-    await mongoose.connect(process.env.MONGO_URI_LOCAL, options);
-    console.log('Connected to local MongoDB successfully');
+    // First try MongoDB Atlas connection
+    console.log('Attempting to connect to MongoDB Atlas...');
+    await mongoose.connect(process.env.MONGO_URI, options);
+    console.log('Connected to MongoDB Atlas successfully');
     startServer();
-  } catch (localErr) {
-    console.error('Local MongoDB Connection Error:', localErr.message);
-    console.log('Local MongoDB connection failed. Trying MongoDB Atlas...');
+  } catch (atlasErr) {
+    console.error('MongoDB Atlas Connection Error:', atlasErr.message);
+    console.log('MongoDB Atlas connection failed. Trying direct connection...');
     
-    // If local connection fails, try MongoDB Atlas
+    // If Atlas connection fails, try direct connection
     try {
-      await mongoose.connect(process.env.MONGO_URI, options);
-      console.log('Connected to MongoDB Atlas successfully');
+      console.log('Trying direct connection to MongoDB Atlas...');
+      await mongoose.connect(process.env.MONGO_URI_DIRECT, options);
+      console.log('Connected to MongoDB Atlas using direct connection');
       startServer();
-    } catch (atlasErr) {
-      console.error('MongoDB Atlas Connection Error:', atlasErr.message);
+    } catch (directErr) {
+      console.error('Direct connection error:', directErr.message);
       
-      // Try direct connection as a last resort
+      // Try local connection as a last resort
       try {
-        console.log('Trying direct connection to MongoDB Atlas...');
-        await mongoose.connect(process.env.MONGO_URI_DIRECT, options);
-        console.log('Connected to MongoDB Atlas using direct connection');
+        console.log('Trying local MongoDB connection as fallback...');
+        await mongoose.connect(process.env.MONGO_URI_LOCAL, options);
+        console.log('Connected to local MongoDB successfully');
         startServer();
-      } catch (directErr) {
+      } catch (localErr) {
         console.error('All MongoDB connection attempts failed');
-        console.error('Direct connection error:', directErr.message);
-        console.log('Please ensure MongoDB is running locally or check your internet connection');
+        console.error('Local MongoDB Connection Error:', localErr.message);
+        console.log('Please check your internet connection or MongoDB configuration');
         process.exit(1);
       }
     }
